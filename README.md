@@ -14,4 +14,11 @@ Estos tiene que setearse, sino aparece el display girado y con los colores mal.
 * Swap X & Y = true
 * BGR = true
 
+# importante
+
+-- Las rutinas del hagl y hagl_esp_mini están modificadas por mi.
+
+-- Le agregué funciones de blit de BMP y JPG
+
+
 Javier 2022
