@@ -53,7 +53,7 @@ valid.
 #include <string.h>
 #include <mipi_display.h>
 #include <bitmap.h>
-#include <hagl.h>
+//#include <hagl.h>
 
 
 static uint8_t *buffer1;

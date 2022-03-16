@@ -57,6 +57,7 @@ extern "C" {
 #define HAGL_HAS_HAL_HLINE
 #define HAGL_HAS_HAL_VLINE
 
+
 /**
  * Put a pixel
  *
@@ -101,6 +102,13 @@ void hagl_hal_hline(int16_t x0, int16_t y0, uint16_t w, color_t color);
  * @param h height of the line
  */
 void hagl_hal_vline(int16_t x0, int16_t y0, uint16_t h, color_t color);
+
+/*
+ * Agrego una forma de enviar comandos al display.
+ * Se pueden enviar o setear registros, y leer registros del display.
+ * Javier.
+ */
+void hagl_hal_control(uint8_t cmd, uint8_t * data, int data_len);
 
 #ifdef __cplusplus
 }

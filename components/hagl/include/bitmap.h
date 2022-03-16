@@ -39,16 +39,15 @@ SPDX-License-Identifier: MIT
 #define BITMAP_SIZE(width, height, depth) (width * (depth / 8) * height)
 
 /*
-Pitch is bytes per row. Depth is number of bits per pixel. Size is size
-in bytes.
+ Pitch is bytes per row. Depth is number of bits per pixel. Size is size in bytes.
 */
 typedef struct {
-    uint16_t width;
-    uint16_t height;
+    uint16_t width;		//para hacer blit solo se usa width,height,buffer
+    uint16_t height;	// "
     uint16_t pitch;
     uint8_t depth;
     uint32_t size;
-    uint8_t *buffer;
+    uint8_t *buffer;	// "
 } bitmap_t;
 
 uint32_t bitmap_size(bitmap_t *bitmap);
