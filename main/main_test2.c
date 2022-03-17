@@ -36,17 +36,17 @@
 #include <esp_log.h>
 #include <esp_task_wdt.h>
 
+#include "../components/gl9340/include/aps.h"
+#include "../components/gl9340/include/fonts/font10x20-ISO8859-7.h"
+#include "../components/gl9340/include/fonts/font10x20_ISO8859_1.h"
+#include "../components/gl9340/include/fonts/font5x7.h"
+#include "../components/gl9340/include/fonts/font5x8.h"
+#include "../components/gl9340/include/fonts/font6x9.h"
+#include "../components/gl9340/include/fonts/font8x13O-ISO8859-13.h"
+#include "../components/gl9340/include/fonts/font9x15B-ISO8859-13.h"
+#include "../components/gl9340/include/fonts/font9x18-ISO8859-13.h"
+#include "../components/gl9340/include/fps.h"
 #include "hagl.h"
-#include "fonts/font6x9.h"
-#include "fonts/font5x7.h"
-#include "fonts/font5x8.h"
-#include "fonts/font10x20_ISO8859_1.h"
-#include "fonts/font10x20-ISO8859-7.h"
-#include "fonts/font8x13O-ISO8859-13.h"
-#include "fonts/font9x18-ISO8859-13.h"
-#include "fonts/font9x15B-ISO8859-13.h"
-#include "fps.h"
-#include "aps.h"
 #include "fsTools.h" // (ahora hagl abre imagenes con la fsTools)
 
 static const char *TAG = "main";

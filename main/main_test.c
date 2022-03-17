@@ -11,9 +11,9 @@
 #include <esp_log.h>
 #include <esp_task_wdt.h>
 
-#include "gl.h"
 #include "fsTools.h"
 #include "chancha.h"
+#include "../components/gl9340/include/gl.h"
 
 static const char *TAG = "main";
 

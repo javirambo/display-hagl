@@ -137,13 +137,7 @@ CONFIG_FILE_SYSTEM_OPEN_FILES=16
 # end of FS Tools Configuration
 
 #
-# Hardware Agnostic Graphics Library (HAGL)
-#
-CONFIG_HAGL_TJPGD_NEEDS_BYTESWAP=y
-# end of Hardware Agnostic Graphics Library (HAGL)
-
-#
-# Hardware Agnostic Graphics Library HAL (MIPI)
+# Graphics Library 9340
 #
 
 #
@@ -191,7 +185,8 @@ CONFIG_MIPI_DISPLAY_PIN_DC=4
 CONFIG_MIPI_DISPLAY_PIN_RST=-1
 CONFIG_MIPI_DISPLAY_PIN_BL=-1
 CONFIG_MIPI_DISPLAY_PWM_BL=-1
-# end of Hardware Agnostic Graphics Library HAL (MIPI)
+CONFIG_HAGL_TJPGD_NEEDS_BYTESWAP=y
+# end of Graphics Library 9340
 
 #
 # Compiler options
