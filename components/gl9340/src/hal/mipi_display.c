@@ -52,6 +52,7 @@
 #include "sdkconfig.h"
 #include "hal/mipi_dcs.h"
 #include "hal/mipi_display.h"
+#include "colors.h"
 
 static const char *TAG = "mipi_display";
 static const uint8_t DELAY_BIT = 1 << 7;
@@ -90,12 +91,12 @@ static void mipi_display_write_command(spi_device_handle_t spi, const uint8_t co
 	memset(&transaction, 0, sizeof(transaction));
 
 	/* Command is 1 byte ie 8 bits */
-	transaction.length = 1 * 8;
+	transaction.length = 8;
 	/* The data is the command itself */
 	transaction.tx_buffer = &command;
 	/* DC needs to be set to 0. */
 	transaction.user = (void*) 0;
-	ESP_LOGD(TAG, "Sending command 0x%02x", (uint8_t )command);
+	//ESP_LOGD(TAG, "Sending command 0x%02x", (uint8_t )command);
 	ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &transaction));
 }
 
@@ -114,10 +115,11 @@ static void mipi_display_write_data(spi_device_handle_t spi, const uint8_t *data
 	/* DC needs to be set to 1 */
 	transaction.user = (void*) 1;
 
-	ESP_LOG_BUFFER_HEX_LEVEL(TAG, data, length, ESP_LOG_DEBUG);
+	//ESP_LOG_BUFFER_HEX_LEVEL(TAG, data, length, ESP_LOG_DEBUG);
 	ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &transaction));
 }
 
+// si son mas de 4 bytes usar mipi_display_read_data_large
 static void mipi_display_read_data(spi_device_handle_t spi, uint8_t *data, size_t length)
 {
 	if (0 == length)
@@ -135,7 +137,9 @@ static void mipi_display_read_data(spi_device_handle_t spi, uint8_t *data, size_
 	transaction.user = (void*) 1;
 
 	ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &transaction));
+	//ESP_ERROR_CHECK(spi_device_transmit(spi, &transaction));
 }
+
 
 /* This function is called in irq context just before a transmission starts. */
 /* It will set the DC line to the value indicated in the user field. */
@@ -247,48 +251,16 @@ void mipi_display_init(spi_device_handle_t *spi)
 	spi_device_acquire_bus(*spi, portMAX_DELAY);
 }
 
-void mipi_display_write(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint8_t *buffer)
+static void mipi_set_address_window(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2)
 {
-	if (0 == w || 0 == h)
-	{
-		return;
-	}
-
-	x1 = x1 + CONFIG_MIPI_DISPLAY_OFFSET_X;
-	y1 = y1 + CONFIG_MIPI_DISPLAY_OFFSET_Y;
-
-	int32_t x2 = x1 + w - 1;
-	int32_t y2 = y1 + h - 1;
-	uint32_t size = w * h;
-
 	static int32_t prev_x1, prev_x2, prev_y1, prev_y2;
-
-	spi_transaction_t command;
-	spi_transaction_t data;
-
-	xSemaphoreTake(mutex, portMAX_DELAY);
-
-	memset(&command, 0, sizeof(spi_transaction_t));
-	command.length = 8;
-	command.user = (void*) 0;
-	command.flags = SPI_TRANS_USE_TXDATA;
-
-	memset(&data, 0, sizeof(spi_transaction_t));
-	data.length = 8 * 4;
-	data.user = (void*) 1;
-	data.flags = SPI_TRANS_USE_TXDATA;
 
 	/* Change column address only if it has changed. */
 	if ((prev_x1 != x1 || prev_x2 != x2))
 	{
-		command.tx_data[0] = MIPI_DCS_SET_COLUMN_ADDRESS;
-		ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &command));
-
-		data.tx_data[0] = x1 >> 8;
-		data.tx_data[1] = x1 & 0xff;
-		data.tx_data[2] = x2 >> 8;
-		data.tx_data[3] = x2 & 0xff;
-		ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &data));
+		mipi_display_write_command(spi, MIPI_DCS_SET_COLUMN_ADDRESS);
+		uint8_t col[4] = { x1 >> 8, x1 & 0xff, x2 >> 8, x2 & 0xff };
+		mipi_display_write_data(spi, col, 4);
 
 		prev_x1 = x1;
 		prev_x2 = x2;
@@ -297,38 +269,55 @@ void mipi_display_write(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint1
 	/* Change page address only if it has changed. */
 	if ((prev_y1 != y1 || prev_y2 != y2))
 	{
-		command.tx_data[0] = MIPI_DCS_SET_PAGE_ADDRESS;
-		ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &command));
-
-		data.tx_data[0] = y1 >> 8;
-		data.tx_data[1] = y1 & 0xff;
-		data.tx_data[2] = y2 >> 8;
-		data.tx_data[3] = y2 & 0xff;
-		ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &data));
+		mipi_display_write_command(spi, MIPI_DCS_SET_PAGE_ADDRESS);
+		uint8_t row[4] = { y1 >> 8, y1 & 0xff, y2 >> 8, y2 & 0xff };
+		mipi_display_write_data(spi, row, 4);
 
 		prev_y1 = y1;
 		prev_y2 = y2;
 	}
+}
 
-	command.tx_data[0] = MIPI_DCS_WRITE_MEMORY_START;
-	ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &command));
+void mipi_display_write(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint8_t *buffer)
+{
+	if (0 == w || 0 == h)
+		return;
 
-	data.rxlength = 0;
-	data.tx_buffer = buffer;
-	/* Transfer size in bits */
-	data.length = size * DISPLAY_DEPTH;
-	/* Clear SPI_TRANS_USE_TXDATA flag */
-	data.flags = 0;
+	int32_t x2 = x1 + w - 1;
+	int32_t y2 = y1 + h - 1;
+	uint32_t size = w * h * 2;
 
-	if (data.length > SPI_MAX_TRANSFER_SIZE / 2)
+	xSemaphoreTake(mutex, portMAX_DELAY);
+	mipi_set_address_window(spi, x1, y1, x2, y2);
+	mipi_display_write_command(spi, MIPI_DCS_WRITE_MEMORY_START);
+	mipi_display_write_data(spi, buffer, size);
+	xSemaphoreGive(mutex);
+}
+
+/**
+ * El buffer tiene que tener espacio para (ancho * alto * 2) bytes (pixels)
+ * ESTA FUNCION NO ANDA, Y DEBE SER PORQUE EL DISPLAY NO ACEPTA LA LECTURA DE LA MEMORIA.
+ */
+void mipi_get_pixel_data(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint8_t *buffer)
+{
+	if (0 == w || 0 == h)
+		return;
+
+	uint8_t pixel[4] = { 0, 0, 0, 0 };
+	xSemaphoreTake(mutex, portMAX_DELAY);
+	uint16_t *p = (uint16_t*) buffer;
+	for (int x = 0; x < w; ++x)
 	{
-		ESP_ERROR_CHECK(spi_device_transmit(spi, &data));
+		for (int y = 0; y < h; ++y)
+		{
+			mipi_set_address_window(spi, x1 + x, y1 + y, x1 + x, y1 + y);
+			//	mipi_display_write_command(spi, 0xd9); // secret command ?
+			mipi_display_write_command(spi, MIPI_DCS_READ_MEMORY_START); // ram read
+			mipi_display_read_data(spi, pixel, 4);
+			*p++ = rgb565(pixel[1], pixel[2], pixel[3]);
+			//ESP_LOGI(TAG, "READ=%02X %02X %02X %02X", pixel[0], pixel[1], pixel[2], pixel[3]);
+		}
 	}
-	else
-	{
-		ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &data));
-	}
-
 	xSemaphoreGive(mutex);
 }
 

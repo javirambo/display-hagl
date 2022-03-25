@@ -56,4 +56,55 @@
 
 #endif*/
 
+
+typedef struct {
+    double h;
+    double s;
+    double l;
+} hsl_t;
+
+
+
+
+typedef struct
+{
+	uint8_t r;
+	uint8_t g;
+	uint8_t b;
+} rgb_t;
+
+
+static inline int min(int a, int b)
+{
+	if (a > b)
+	{
+		return b;
+	}
+	return a;
+}
+
+static inline int max(int a, int b)
+{
+	if (a > b)
+	{
+		return a;
+	}
+	return b;
+}
+
+static inline uint8_t rgb332(uint8_t r, uint8_t g, uint8_t b)
+{
+    uint8_t r3 = ((r >> 4) & 0b00000110) | (r & 0b00000001);
+    uint8_t g3 = ((g >> 4) & 0b00000110) | (g & 0b00000001);
+    uint8_t b3 = ((b >> 4) & 0b00000110) | (b & 0b00000001);
+    return (r3 << 5) | (g3 << 2) | (b3);
+}
+
+
+uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b);
+rgb_t rgb565_to_rgb888(uint16_t *input);
+rgb_t hsl_to_rgb888(hsl_t *hsl);
+hsl_t rgb888_to_hsl(rgb_t *rgb);
+uint16_t rgb888_to_rgb565(rgb_t *input);
+
 #endif /* COMPONENTS_HAGL_INCLUDE_COLORS_H_ */

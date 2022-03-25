@@ -4,7 +4,7 @@
  *  Created on: 15 mar. 2022
  *      Author: Javier
  */
-#include "../../gl9340/include/rect.h"
+#include "rect.h"
 
 static void swap_int(int *a, int *b)
 {
@@ -37,9 +37,9 @@ void set_rect_w(int x, int y, int w, int h, RECT *rec)
 {
 	rec->x0 = x;
 	rec->y0 = y;
-	rec->x1 = x + w;
-	rec->y1 = y + h;
+	rec->x1 = x + w - 1;
+	rec->y1 = y + h - 1;
 	rect_norm(rec);
-	rec->w = rec->x1 - rec->x0 + 1;
-	rec->h = rec->y1 - rec->y0 + 1;
+	rec->w = w;
+	rec->h = h;
 }

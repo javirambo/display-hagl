@@ -1,45 +1,46 @@
 /*
 
-MIT License
+ MIT License
 
-Copyright (c) 2012 ChaN
-Copyright (c) 2020-2021 Mika Tuupola
+ Copyright (c) 2012 ChaN
+ Copyright (c) 2020-2021 Mika Tuupola
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
 
--cut-
+ -cut-
 
-This file is part of the HAGL graphics library:
-https://github.com/tuupola/hagl
+ This file is part of the HAGL graphics library:
+ https://github.com/tuupola/hagl
 
-Adapted from the blog post by ChaN:
-http://elm-chan.org/docs/dosv/fontx_e.html
+ Adapted from the blog post by ChaN:
+ http://elm-chan.org/docs/dosv/fontx_e.html
 
-SPDX-License-Identifier: MIT
+ SPDX-License-Identifier: MIT
 
-*/
+ */
 
 #ifndef _HAGL_FONTX_H
 #define _HAGL_FONTX_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #define FONTX_OK                   (0)
@@ -58,19 +59,21 @@ extern "C" {
 #include <stddef.h>
 
 /* Pitch is bytes per row. Size is size in bytes. */
-typedef struct{
-    uint8_t width;
-    uint8_t height;
-    uint8_t size;
-    uint8_t pitch;
-    const uint8_t *buffer;
+typedef struct
+{
+	uint8_t width;
+	uint8_t height;
+	uint8_t size;
+	uint8_t pitch;
+	const uint8_t *buffer;
 } fontx_glyph_t;
 
-typedef struct{
-    char name[9];
-    uint8_t width;
-    uint8_t height;
-    uint8_t type;
+typedef struct
+{
+	char name[9];
+	uint8_t width;
+	uint8_t height;
+	uint8_t type;
 } fontx_meta_t;
 
 uint8_t fontx_meta(fontx_meta_t *meta, const uint8_t *font);

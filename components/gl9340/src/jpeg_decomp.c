@@ -20,9 +20,8 @@
  / Jul 01, 2020 R0.01d Fixed wrong integer type usage.
  /----------------------------------------------------------------------------*/
 
-#include "../../gl9340/include/jpeg_decomp.h"
-
-#include "../../gl9340/include/config.h"
+#include "jpeg_decomp.h"
+#include "config.h"
 
 /*-----------------------------------------------*/
 /* Zigzag-order to raster-order conversion table */

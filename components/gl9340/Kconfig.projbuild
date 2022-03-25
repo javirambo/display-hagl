@@ -97,18 +97,6 @@ menu "Graphics Library 9340"
 	    int "Display height in pixels"
 	    default 240
 	
-	config MIPI_DISPLAY_OFFSET_X
-	    int "X offset"
-	    default 0
-	    help
-	        Adjust when using small display and image is not centered.
-	
-	config MIPI_DISPLAY_OFFSET_Y
-	    int "Y offset"
-	    default 0
-	    help
-	        Adjust when using small display and image is not centered.
-	
 	config MIPI_DISPLAY_INVERT
 	    bool "Invert colors"
 	

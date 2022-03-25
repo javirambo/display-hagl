@@ -81,6 +81,7 @@ typedef uint8_t color_t;
 #define DISPLAY_WIDTH       (CONFIG_MIPI_DISPLAY_WIDTH)
 #define DISPLAY_HEIGHT      (CONFIG_MIPI_DISPLAY_HEIGHT)
 #define DISPLAY_DEPTH       (CONFIG_MIPI_DISPLAY_DEPTH)
+// OJO QUE *DISPLAY_DEPTH* ES EN BITS !!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef __cplusplus
 }

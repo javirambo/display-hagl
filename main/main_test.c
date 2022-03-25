@@ -13,14 +13,15 @@
 
 #include "fsTools.h"
 #include "chancha.h"
-#include "../components/gl9340/include/gl.h"
+#include "gl.h"
+#include "fonts/font6x9.h"
 
 static const char *TAG = "main";
 
 static void sleep()
 {
 	ESP_LOGI(TAG, "Heap despues: %d", esp_get_free_heap_size());
-	vTaskDelay(500 / portTICK_RATE_MS);
+	vTaskDelay(5000 / portTICK_RATE_MS);
 	gl_fill_screen(BLACK);
 	ESP_LOGI(TAG, "Heap antes  : %d", esp_get_free_heap_size());
 }
@@ -76,11 +77,57 @@ void demo_4()
 	sleep();
 }
 
+// para imagenes bajadas desde GIMP
 void demo_5()
 {
 	bitmap_t image;
 	gl_load_gimp_image(&chancha_parada, &image);
 	gl_blit(esp_random() % 320 - chancha_parada.width, esp_random() % 240 - chancha_parada.height, &image);
+	sleep();
+}
+
+// pruebo hacer scroll de la pantalla
+// COMO NO SE PUEDE LEER LA RAM DEL DISPLAY, VOY A USAR UN BITMAP PARA ESCRIBIR EN ÉL,
+// Y HACER UN BLIT CON CADA LINEA AGREGADA AL FINAL (simulo una terminal)
+void demo_6()
+{
+	gl_fill_screen(BLUE);
+//	RECT rect;
+//	set_rect_w(0, 0, DISPLAY_HEIGHT, DISPLAY_WIDTH, &rect);
+//	bitmap_t terminal;
+//	alloc_bitmap(&rect, &terminal);
+	terminal_t term;
+	gl_init_terminal(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, font6x9, YELLOW, BLUE, &term);
+	vTaskDelay(1000 / portTICK_RATE_MS);
+
+	char buf[100];
+	for (int i = 0; i < 15; ++i)
+	{
+		//gl_terminal_print(&term, "HOLA ");
+		sprintf(buf, "RAND %d", i);
+		gl_terminal_print(&term, buf);
+
+		vTaskDelay(50 / portTICK_RATE_MS);
+	}
+	gl_terminal_print(&term, "PENULTIMA");
+	vTaskDelay(1000 / portTICK_RATE_MS);
+	gl_terminal_print(&term, "FIN DE LINEA");
+	vTaskDelay(1000 / portTICK_RATE_MS);
+
+	//gl_fill_screen(BLUE);
+
+	/*gl_set_font(font6x9);
+	 gl_set_font_color( YELLOW, BLUE);
+	 gl_set_font_pos(20, 20);
+	 gl_put_text("HOLA");
+	 gl_put_text(" MONGO\n");
+	 gl_put_text("HOLA");
+	 gl_put_text(" mundo°!#$%&(()=?¡");*/
+
+	//gl_blit(160, 120, &cacho);
+	//free(terminal.buffer);
+	gl_destroy_terminal(&term);
+
 	sleep();
 }
 
@@ -92,10 +139,11 @@ void app_main()
 
 	while (1)
 	{
-		demo_1();
-		demo_2();
-		demo_3();
-		demo_4();
-		demo_5();
+		//demo_1();
+		//demo_2();
+		//demo_3();
+		//demo_4();
+		//demo_5();
+		demo_6();
 	}
 }

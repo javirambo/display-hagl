@@ -46,7 +46,6 @@ extern "C"
 #include "colors.h"
 #include "rect.h"
 #include "bitmap.h"
-#include "rgb565.h"
 #include "rect.h"
 #include "fontx.h"
 
@@ -148,6 +147,11 @@ uint32_t gl_show_image_file(int16_t x0, int16_t y0, const char *filename);
 uint32_t gl_show_partial_image(uint16_t x0, uint16_t y0, bitmap_t *bitmap, RECT *img_rect, uint16_t transparentColor);
 
 uint32_t gl_load_gimp_image(void *gimp_img, bitmap_t *bmp);
+
+#if 0
+// ESTO NO FUNCIONA PORQUE NO SE PUEDE LEER LA RAM DEL DISPLAY
+uint32_t save_screen(RECT *rect, bitmap_t *target);
+#endif
 
 // OJO HACER FREE AL BMP!
 uint32_t gl_load_image(const char *filename, bitmap_t *bitmap);
@@ -368,11 +372,35 @@ void gl_fill_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 /////// FUNCIONES PARA TEXTO
 //////////////////////////////////////////////////////////////////////
 
-uint8_t gl_put_char(char code, int16_t x0, int16_t y0, color_t color, const uint8_t *font);
+typedef struct
+{
+	uint16_t x; 	// posicion actual de la font
+	uint16_t y; 	//  "
+	color_t bg; 	// color de fondo
+	color_t fg; 	// color de la letra
+	uint8_t *fx;	// font seleccionada
+} font_screen_t;
 
-uint16_t gl_put_text(const char *str, int16_t x0, int16_t y0, color_t color, const unsigned char *font);
+typedef struct
+{
+	//RECT *rect;
+	bitmap_t *bmp;
+	font_screen_t font;
+	int line_nbr;  	// numero de linea que se esta imprimiendo, si se pasa del max hace scroll.
+	int line_max; 	// lineas verticales maximas.
+	int line_h; 	// alto de la linea (cant de pixels a escrolar)
+} terminal_t;
 
-uint8_t gl_get_glyph(char code, color_t color, bitmap_t *bitmap, const uint8_t *font);
+void gl_set_font(const uint8_t *font);
+void gl_set_font_color(color_t fg, color_t bg);
+void gl_set_font_pos(uint16_t x, uint16_t y);
+int gl_print(const char *str);
+
+uint8_t gl_get_glyph(char code, color_t fg, color_t bg, bitmap_t *bitmap, uint8_t *fx);
+
+void gl_init_terminal(int x, int y, int w, int h, const uint8_t *fx, color_t fg, color_t bg, terminal_t *term);
+int gl_terminal_print(terminal_t *term, char *text);
+void gl_destroy_terminal(terminal_t *term);
 
 #ifdef __cplusplus
 }

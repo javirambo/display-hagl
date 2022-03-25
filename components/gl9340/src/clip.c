@@ -36,8 +36,7 @@ https://en.wikipedia.org/wiki/Cohen%E2%80%93Sutherland_algorithm
 
 #include <stdint.h>
 #include <stdbool.h>
-
-#include "../../gl9340/include/rect.h"
+#include "rect.h"
 
 static const uint8_t INSIDE = 0b0000;
 static const uint8_t LEFT = 0b0001;

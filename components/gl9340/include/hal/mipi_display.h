@@ -73,6 +73,7 @@ void mipi_display_init(spi_device_handle_t *spi);
 void mipi_display_write(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint8_t *buffer);
 void mipi_display_ioctl(spi_device_handle_t spi, uint8_t command, uint8_t *data, size_t size);
 void mipi_display_close(spi_device_handle_t spi);
+void mipi_get_pixel_data(spi_device_handle_t spi, uint16_t x0, uint16_t y0, uint16_t w, uint16_t h, uint8_t *destination_buffer);
 
 #ifdef __cplusplus
 }

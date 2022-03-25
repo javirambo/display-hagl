@@ -38,7 +38,7 @@ SPDX-License-Identifier: MIT
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "../../gl9340/include/rect.h"
+#include "rect.h"
 
 bool clip_line(int16_t *x0, int16_t *y0, int16_t *x1, int16_t *y1, RECT window);
 

@@ -31,7 +31,7 @@
  SPDX-License-Identifier: MIT
  */
 
-#include "../../gl9340/include/gl.h"
+#include "gl.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -42,10 +42,9 @@
 #include <esp_log.h>
 
 #include "fsTools.h"
-#include "../../gl9340/include/bitmap.h"
-#include "../../gl9340/include/clip.h"
-#include "../../gl9340/include/jpeg_decomp.h"
-#include "../../gl9340/include/rgb565.h"
+#include "bitmap.h"
+#include "clip.h"
+#include "jpeg_decomp.h"
 
 static const char *TAG = "gl";
 
@@ -54,8 +53,6 @@ static const char *TAG = "gl";
 #define ABS(x)  ((x) > 0 ? (x) : -(x))
 
 #define GL_CHAR_BUFFER_SIZE    (16 * 16 * DISPLAY_DEPTH / 2)
-
-extern RECT clip_window;
 
 typedef struct
 {
@@ -68,13 +65,16 @@ typedef struct
 	bitmap_t *image; // para cargarlo desde FS (ojo, hacer un free del buffer si no se usa mas)
 } tjpgd_iodev_t;
 
-RECT clip_window = {
+static RECT clip_window = {
 	.x0 = 0, .y0 = 0, .x1 = DISPLAY_WIDTH - 1, .y1 = DISPLAY_HEIGHT - 1,
 	.w = DISPLAY_WIDTH, .h = DISPLAY_HEIGHT
 };
 
 #define JPG_WORKSPACE_SIZE 4000
 static uint8_t workspace[JPG_WORKSPACE_SIZE] __attribute__((aligned(4)));
+
+// font actual que se usa para la pantalla.
+static font_screen_t font_actual;
 
 static bool str_ends_with(const char *name, char *ext)
 {
@@ -168,6 +168,7 @@ color_t gl_get_pixel(int16_t x0, int16_t y0)
 	}
 
 #ifdef gl_HAS_HAL_GET_PIXEL
+	// esto está comentado porque el display no puede leer la memoria ram.
     return hagl_hal_get_pixel(x0, y0);
 #else
 	return gl_color(0, 0, 0);
@@ -542,6 +543,10 @@ void gl_blit(int16_t x0, int16_t y0, bitmap_t *source)
  * La porcion de la imagen está dada por el RECT.
  * Los bits = transparentColor no los pinta en el display.
  *
+ * IMPORTANTE: NO SE PUEDE LEER LA RAM DEL DISPLAY, POR LO TANTO NO PUEDO HACER
+ * TOTALMENTE TRANSPARENTE LA IMAGEN A MOSTRAR.
+ * (O SEA, NO PUEDO HACER UN COLOR ENTRE EL BG Y EL FG)
+ *
  * El RECT tiene que estar normalizado (x/y/ancho y alto)
  */
 uint32_t gl_show_partial_image(uint16_t x0, uint16_t y0, bitmap_t *image, RECT *rect, uint16_t transparentColor)
@@ -557,24 +562,8 @@ uint32_t gl_show_partial_image(uint16_t x0, uint16_t y0, bitmap_t *image, RECT *
 	{
 		for (int fx = 0; fx < w; fx++)
 		{
-			// colores del fondo
-			/*pix = gl_get_pixel(x + fx, y + fy);
-			 bb = pix & 0xF800;
-			 bg = pix & 0x07E0;
-			 br = pix & 0x001F;
-
-			 // colores de la letra
-			 fb = 0xF800 - (*bmp & 0xF800);
-			 fg = 0x07E0 - (*bmp & 0x07E0);
-			 fr = 0x001F - (*bmp & 0x001F);
-			 alfa = ((float) fg) / (float) 0x3f; // 0..1*/
-
-			//alfa = (*pbmp & 0x07E0) >> 5;
 			if (*bmp != transparentColor)
 			{
-				//fg = (*pbmp * alfa) + (bg * (0x1f - alfa));
-				//	pix = ((br * fr / 0x1f) & 0xf800) | ((bg * fg / 0x2f) & 0x07e0) | ((bb * fb / 0x1f) & 0x001f);
-				//pix = ((uint16_t) ((float) fg * alfa + (float) bg * (1 - alfa))) & 0x07e0;
 				gl_put_pixel(x0 + fx, y0 + fy, *bmp);
 			}
 			bmp++; // sig pixel horiz
@@ -583,6 +572,16 @@ uint32_t gl_show_partial_image(uint16_t x0, uint16_t y0, bitmap_t *image, RECT *
 	}
 	return GL_OK;
 }
+
+#if 0
+// ESTO NO FUNCIONA PORQUE NO SE PUEDE LEER LA RAM DEL DISPLAY
+// OJO, El bmp target tiene que tener espacio en el buffer para guardar la pantalla.
+uint32_t save_screen(RECT *rect, bitmap_t *target)
+{
+	hagl_hal_get_pixel_data(rect, target->buffer);
+	return GL_OK;
+}
+#endif
 
 //////////////////////////////////////////////////////////////////////
 ////////// COSAS DE SHAPES Y DIBUJOS
@@ -1297,21 +1296,73 @@ void gl_fill_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 /////// COSAS DE TEXTO
 //////////////////////////////////////////////////////////////////////
 
-uint8_t gl_put_char(char code, int16_t x0, int16_t y0, color_t color, const uint8_t *font)
+void gl_set_font(const uint8_t *fx)
 {
-	uint8_t set, status;
+	font_actual.fx = (uint8_t*) fx;
+}
+
+void gl_set_font_color(uint16_t fg, uint16_t bg)
+{
+	font_actual.fg = fg;
+	font_actual.bg = bg;
+}
+
+void gl_set_font_pos(uint16_t x, uint16_t y)
+{
+	font_actual.x = clip_window.x0 + x;
+	font_actual.y = clip_window.y0 + y;
+}
+
+static uint8_t gl_put_char_into_bitmap(char code, font_screen_t *font, bitmap_t *destination)
+{
+	uint8_t isForeGround, status;
+	fontx_glyph_t glyph;
+	status = fontx_glyph(&glyph, (wchar_t) code, font->fx);
+	if (0 != status)
+	{
+		ESP_LOGE("*", "No esta el char=%02X en el font!", code);
+		return 0;
+	}
+	color_t *ptr = (color_t*) destination->buffer + font->x + font->y*destination->width;
+	int pitch = destination->width - glyph.width;
+
+	for (uint8_t y = 0; y < glyph.height; y++)
+	{
+		for (uint8_t x = 0; x < glyph.width; x++)
+		{
+			isForeGround = *(glyph.buffer + x / 8) & (0x80 >> (x % 8));
+			if (isForeGround)
+			{
+				*(ptr++) = font->fg;
+			}
+			else
+			{
+				*(ptr++) = font->bg;
+			}
+		}
+		glyph.buffer += glyph.pitch;
+		ptr += pitch;
+	}
+	return glyph.width;
+}
+
+static uint8_t gl_put_char(char code, font_screen_t *font, RECT *window)
+{
+	uint8_t isForeGround, status;
 	color_t buffer[GL_CHAR_BUFFER_SIZE];
-	bitmap_t bitmap;
 	fontx_glyph_t glyph;
 
-	status = fontx_glyph(&glyph, (wchar_t) code, font);
+	status = fontx_glyph(&glyph, (wchar_t) code, font->fx);
 
 	if (0 != status)
 	{
 		return 0;
 	}
 
-	bitmap.width = glyph.width, bitmap.height = glyph.height, bitmap.depth = DISPLAY_DEPTH,
+	bitmap_t bitmap = {
+		.width = glyph.width,
+		.height = glyph.height,
+		.depth = DISPLAY_DEPTH };
 
 	bitmap_init(&bitmap, (uint8_t*) buffer);
 
@@ -1321,40 +1372,72 @@ uint8_t gl_put_char(char code, int16_t x0, int16_t y0, color_t color, const uint
 	{
 		for (uint8_t x = 0; x < glyph.width; x++)
 		{
-			set = *(glyph.buffer + x / 8) & (0x80 >> (x % 8));
-			if (set)
+			isForeGround = *(glyph.buffer + x / 8) & (0x80 >> (x % 8));
+			if (isForeGround)
 			{
-				*(ptr++) = color;
+				*(ptr++) = font->fg;
 			}
 			else
 			{
-				*(ptr++) = 0x0000;
+				*(ptr++) = font->bg;
 			}
 		}
 		glyph.buffer += glyph.pitch;
 	}
 
-	gl_blit(x0, y0, &bitmap);
+	gl_blit(window->x0 + font->x, window->y0 + font->y, &bitmap);
 
 	return bitmap.width;
 }
 
 /*
- * Write a string of text by calling gl_put_char() repeadetly. CR and LF
- * continue from the next line.
+ *
  */
+static int gl_put_text_into_bitmap(const char *str, font_screen_t *font, bitmap_t *destination)
+{
+	char temp;
+	//int err = 0;
 
-uint16_t gl_put_text(const char *str, int16_t x0, int16_t y0, color_t color, const unsigned char *font)
+	fontx_meta_t meta;
+	fontx_meta(&meta, font->fx);
+	ESP_LOGI("*", "meta -> w=%d w=%d, str=%s", meta.height, meta.width, str);
+
+	do
+	{
+		temp = *str++;
+		/*if (13 == temp || 10 == temp)
+		 {
+		 font->x = 0;
+		 font->y += meta.height;
+		 }
+		 else
+		 {*/
+		// verifico que no este fuera de la ventana verticalmente:
+		/*if (font->y + meta.height > window->h)
+		 {
+		 font->bg = RED;
+		 err++;
+		 }*/
+		// por ahora marco en ROJO si se pasa de linea....
+		//font->x += gl_put_char(temp, font, window);
+		font->x += gl_put_char_into_bitmap(temp, font, destination);
+		//ESP_LOGI("*", "char=%c | x=%d", temp, font->x);
+		//}
+	} while (*str != 0);
+	return 0; // retorna 0=OK o la cantidad de lineas que se pasó de la ventana
+}
+
+static int gl_put_text(const char *str, font_screen_t *font, RECT *window)
 {
 	char temp;
 	uint8_t status;
-	uint16_t original = x0;
 	fontx_meta_t meta;
+	int err = 0;
 
-	status = fontx_meta(&meta, font);
+	status = fontx_meta(&meta, font->fx);
 	if (0 != status)
 	{
-		return 0;
+		return -1; // ERROR, font desconocida? rota?
 	}
 
 	do
@@ -1362,21 +1445,35 @@ uint16_t gl_put_text(const char *str, int16_t x0, int16_t y0, color_t color, con
 		temp = *str++;
 		if (13 == temp || 10 == temp)
 		{
-			x0 = 0;
-			y0 += meta.height;
+			font->x = 0;
+			font->y += meta.height;
 		}
 		else
 		{
-			x0 += gl_put_char(temp, x0, y0, color, font);
+			// verifico que no este fuera de la ventana verticalmente:
+			if (font->y + meta.height > window->h)
+			{
+				font->bg = RED;
+				err++;
+			}
+			// por ahora marco en ROJO si se pasa de linea....
+			font->x += gl_put_char(temp, font, window);
 		}
 	} while (*str != 0);
-
-	return x0 - original;
+	return err; // retorna 0=OK o la cantidad de lineas que se pasó de la ventana
 }
 
-uint8_t gl_get_glyph(char code, color_t color, bitmap_t *bitmap, const uint8_t *font)
+// imprime en pantalla, pero dentro de la ventana clip_window
+int gl_print(const char *str)
 {
-	uint8_t status, set;
+	return gl_put_text(str, &font_actual, &clip_window);
+}
+
+// mete en el bitmap la letra 'code' de la font 'font'
+// el bitmap tiene que tener espacio para almacenar la font (del tamaño fontY*X*2)
+uint8_t gl_get_glyph(char code, color_t fg, color_t bg, bitmap_t *bitmap, uint8_t *font)
+{
+	uint8_t status, isForeGround;
 	fontx_glyph_t glyph;
 
 	status = fontx_glyph(&glyph, code, font);
@@ -1387,7 +1484,10 @@ uint8_t gl_get_glyph(char code, color_t color, bitmap_t *bitmap, const uint8_t *
 	}
 
 	/* Initialise bitmap dimensions. */
-	bitmap->depth = DISPLAY_DEPTH, bitmap->width = glyph.width, bitmap->height = glyph.height, bitmap->pitch = bitmap->width * (bitmap->depth / 8);
+	bitmap->depth = DISPLAY_DEPTH;
+	bitmap->width = glyph.width;
+	bitmap->height = glyph.height;
+	bitmap->pitch = bitmap->width * (bitmap->depth / 8);
 	bitmap->size = bitmap->pitch * bitmap->height;
 
 	color_t *ptr = (color_t*) bitmap->buffer;
@@ -1396,20 +1496,104 @@ uint8_t gl_get_glyph(char code, color_t color, bitmap_t *bitmap, const uint8_t *
 	{
 		for (uint8_t x = 0; x < glyph.width; x++)
 		{
-			set = *(glyph.buffer) & (0x80 >> (x % 8));
-			if (set)
+			isForeGround = *(glyph.buffer) & (0x80 >> (x % 8));
+			if (isForeGround)
 			{
-				*(ptr++) = color;
+				*(ptr++) = fg;
 			}
 			else
 			{
-				*(ptr++) = 0x0000;
+				*(ptr++) = bg;
 			}
 		}
 		glyph.buffer += glyph.pitch;
 	}
 
 	return 0;
+}
+
+void gl_init_terminal(int x, int y, int w, int h, const uint8_t *fx, color_t fg, color_t bg, terminal_t *terminal)
+{
+	// obtengo tamaño del alto de la font (necesito que el buffer sea una linea mas grande)
+	fontx_meta_t meta;
+	fontx_meta(&meta, fx);
+
+	// guardo la font y valores calculados de linea
+	terminal->font.fx = (uint8_t*) fx;
+	terminal->font.fg = fg;
+	terminal->font.bg = bg;
+	terminal->font.x = 0;
+	terminal->font.y = 0;
+	terminal->line_max = h / meta.height; // calculo cant de lineas
+	terminal->line_nbr = 0;
+	terminal->line_h = meta.height;
+
+	//terminal->rect = calloc(1, sizeof(RECT));
+	terminal->bmp = calloc(1, sizeof(bitmap_t)); // tamaño para la estructura solamante
+
+	// creo buffers para el bitmap (1 linea mas grande):
+	RECT rec;
+	set_rect_w(x, y, w, h + meta.height, &rec);
+	alloc_bitmap(&rec, terminal->bmp); // tamaño para el buffer del bitmap
+
+	if (terminal->bmp->buffer == NULL)
+	{
+		// si el area de pantalla es muy grande y no tengo memoria esto explota aca!
+		ESP_LOGE(TAG, "NO PUDE ALOJAR MEMORIA PARA LA TERMINAL");
+	}
+
+	// lleno con color de fondo y muestro en pantalla: clear screen
+	memset((color_t*) terminal->bmp->buffer, bg, terminal->bmp->height * terminal->bmp->width);
+	gl_blit(0, 0, terminal->bmp);
+
+	//gl_fill_rectangle(x, y, w - 1, h - 1, bg);
+}
+
+// TODO averiguar cuantos \n hay para saber cuanto escrolear.
+// por ahora avanza una linea con cada print
+int gl_terminal_print(terminal_t *term, char *text)
+{
+	int y = 0;
+	term->font.y = term->line_nbr * term->line_h;
+	term->font.x = 0; //siempre comienza en la 1ra col
+	gl_put_text_into_bitmap(text, &(term->font), term->bmp);
+
+	//-1- scroll 1 linea
+	if (term->line_nbr > term->line_max)
+	{
+		// en lugar de scrolear, pego el bitmap mas arriba que el top
+		// (valores negatidos se descartan en gl_put_pixel)
+
+		//vert_scroll_bitmap(term->bmp, term->line_h);
+		y = -term->line_h;
+	}
+	else
+		term->line_nbr++;
+
+	gl_blit(0, y, term->bmp);
+
+	//-2-setear x,y abajo de todo
+	//gl_put_text_into_bitmap(text, &(term->font), term->bmp);
+	//-3- print de la ultima linea
+	//TODO cambiar 0,0 por la window
+	//gl_blit(0, 0, term->bmp);
+	return 0;
+}
+
+void gl_destroy_terminal(terminal_t *terminal)
+{
+	if (terminal)
+	{
+		if (terminal->bmp->buffer)
+		{
+			free(terminal->bmp->buffer);
+			terminal->bmp->buffer = 0;
+		}
+		//free(terminal->rect);
+		//terminal->rect = 0;
+		free(terminal->bmp);
+		terminal->bmp = 0;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////

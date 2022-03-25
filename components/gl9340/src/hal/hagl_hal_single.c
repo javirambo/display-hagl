@@ -61,6 +61,13 @@ void hagl_hal_put_pixel(int16_t x0, int16_t y0, color_t color)
 	mipi_display_write(spi, x0, y0, 1, 1, (uint8_t*) &color);
 }
 
+color_t hagl_hal_get_pixel(int16_t x0, int16_t y0)
+{
+	color_t color;
+	mipi_get_pixel_data(spi, x0, y0, 1, 1, (uint8_t*)&color);
+	return color;
+}
+
 void hagl_hal_blit(uint16_t x0, uint16_t y0, bitmap_t *src)
 {
 	mipi_display_write(spi, x0, y0, src->width, src->height, (uint8_t*) src->buffer);
@@ -82,6 +89,11 @@ void hagl_hal_vline(int16_t x0, int16_t y0, uint16_t height, color_t color)
 	for (uint16_t x = 0; x < height; x++)
 		*(ptr++) = color;
 	mipi_display_write(spi, x0, y0, 1, height, (uint8_t*) line);
+}
+
+void hagl_hal_get_pixel_data(RECT *rect, uint8_t *destination_buffer)
+{
+	mipi_get_pixel_data(spi, rect->x0, rect->y0, rect->w, rect->h, destination_buffer);
 }
 
 /*
