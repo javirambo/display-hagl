@@ -319,11 +319,13 @@ typedef struct
 } terminal_t;
 
 void gl_set_font(const uint8_t *font);
-void gl_set_font_color(color_t fg, color_t bg);
+void gl_set_font_color(color_t fg);
+void gl_set_font_colors(color_t fg, color_t bg);
 void gl_set_transparent();
 void gl_clear_transparent();
 void gl_set_font_pos(uint16_t x, uint16_t y);
 void gl_print(const char *str);
+int gl_printf(const char *format, ...);
 
 terminal_t* gl_terminal_new(int x, int y, int w, int h, const uint8_t *fx, color_t fg, color_t bg);
 void gl_terminal_print(terminal_t *term, char *text);

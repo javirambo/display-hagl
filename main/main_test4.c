@@ -35,12 +35,12 @@ static void sleep()
 void demo_1()
 {
 	gl_draw_rounded_rectangle(0, 0, 319, 239, 35, RED);
-	bitmap_t *chancha = gl_load_image("chancha-parada.jpg");
+	bitmap_t *chancha = gl_load_image("chancha-parada.jpg"); // 71x50
 
 	if (!chancha)
 		ESP_LOGE(TAG, "error al cargar la imagen");
 
-	gl_blit(80, 20, chancha, NULL);
+	gl_blit((320 - 71) / 2, (240 - 50) / 2, chancha, NULL);
 
 	bitmap_delete(chancha);
 	sleep();
@@ -62,14 +62,14 @@ void demo_3()
 	gl_fill_screen(BLUE);
 
 	gl_set_font(font6x9);
-	gl_set_font_color(YELLOW, NAVY);
+	gl_set_font_colors(YELLOW, NAVY);
 	gl_set_font_pos(20, 20);
 	gl_clear_transparent();
 	gl_print("HOLA");
 	gl_print(" MONGO\n");
 	gl_set_transparent();
-	gl_print("ESTO ES ");
-	gl_print("TRANSPARENTE");
+	gl_printf("PRINTF(%d) ", esp_random());
+	gl_printf("TRANSPARENTE");
 
 	sleep();
 }

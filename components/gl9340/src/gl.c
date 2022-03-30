@@ -949,7 +949,12 @@ void gl_set_font(const uint8_t *fx)
 	terminal_actual.fx = fontx_meta(&(terminal_actual.meta), fx);
 }
 
-void gl_set_font_color(uint16_t fg, uint16_t bg)
+void gl_set_font_color(uint16_t fg)
+{
+	terminal_actual.fg = fg;
+}
+
+void gl_set_font_colors(uint16_t fg, uint16_t bg)
 {
 	terminal_actual.fg = fg;
 	terminal_actual.bg = bg;
@@ -1041,6 +1046,18 @@ static void gl_put_text(terminal_t *term, const char *str)
 void gl_print(const char *text)
 {
 	gl_put_text(&terminal_actual, text);
+}
+
+int gl_printf(const char *format, ...)
+{
+	va_list arg;
+	va_start(arg, format);
+	char temp[200];
+	int len = vsnprintf(temp, sizeof(temp) - 1, format, arg);
+	temp[sizeof(temp) - 1] = 0;
+	gl_put_text(&terminal_actual, temp);
+	va_end(arg);
+	return len;
 }
 
 // se pueden generar terminales diferentes a la por defecto.
