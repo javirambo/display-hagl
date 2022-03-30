@@ -72,13 +72,8 @@ uint16_t rgb888_to_rgb565(rgb_t *input)
 
 uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b)
 {
-	uint16_t rgb;
-
-	rgb = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3);
-	rgb = (((rgb) << 8) & 0xFF00) | (((rgb) >> 8) & 0xFF);
-
-	//ESP_LOGI(__FUNCTION__, "0x%04X // %d, %d, %d", rgb, r, g, b);
-	return rgb;
+	uint16_t rgb = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3);
+	return (((rgb) << 8) & 0xFF00) | (((rgb) >> 8) & 0xFF);
 }
 
 rgb_t rgb565_to_rgb888(uint16_t *input)

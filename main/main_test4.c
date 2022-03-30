@@ -174,6 +174,8 @@ void demo_6()
 
 static void pantalla_para_scrolar()
 {
+	vTaskDelay(1000 / portTICK_RATE_MS);
+
 	gl_fill_screen(YELLOW);
 	int w2 = DISPLAY_WIDTH / 2 - 20;
 	int h2 = DISPLAY_HEIGHT / 2 - 20;

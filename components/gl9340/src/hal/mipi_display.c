@@ -96,7 +96,6 @@ static void mipi_display_write_command(spi_device_handle_t spi, const uint8_t co
 	transaction.tx_buffer = &command;
 	/* DC needs to be set to 0. */
 	transaction.user = (void*) 0;
-	//ESP_LOGD(TAG, "Sending command 0x%02x", (uint8_t )command);
 	ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &transaction));
 }
 
@@ -115,7 +114,6 @@ static void mipi_display_write_data(spi_device_handle_t spi, const uint8_t *data
 	/* DC needs to be set to 1 */
 	transaction.user = (void*) 1;
 
-	//ESP_LOG_BUFFER_HEX_LEVEL(TAG, data, length, ESP_LOG_DEBUG);
 	ESP_ERROR_CHECK(spi_device_polling_transmit(spi, &transaction));
 }
 
@@ -315,7 +313,6 @@ void mipi_get_pixel_data(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint
 			mipi_display_write_command(spi, MIPI_DCS_READ_MEMORY_START); // ram read
 			mipi_display_read_data(spi, pixel, 4);
 			*p++ = rgb565(pixel[1], pixel[2], pixel[3]);
-			//ESP_LOGI(TAG, "READ=%02X %02X %02X %02X", pixel[0], pixel[1], pixel[2], pixel[3]);
 		}
 	}
 	xSemaphoreGive(mutex);
