@@ -46,14 +46,13 @@
 #ifdef CONFIG_HAGL_HAL_NO_BUFFERING
 
 #include "hal/mipi_display.h"
+#include <freertos/semphr.h>
 
 static spi_device_handle_t spi;
-//static const char *TAG = "hagl_esp_mipi";
 
-bitmap_t* hagl_hal_init(void)
+void hagl_hal_init()
 {
 	mipi_display_init(&spi);
-	return NULL;
 }
 
 void hagl_hal_put_pixel(int16_t x0, int16_t y0, color_t color)
@@ -64,13 +63,14 @@ void hagl_hal_put_pixel(int16_t x0, int16_t y0, color_t color)
 color_t hagl_hal_get_pixel(int16_t x0, int16_t y0)
 {
 	color_t color;
-	mipi_get_pixel_data(spi, x0, y0, 1, 1, (uint8_t*)&color);
+	mipi_get_pixel_data(spi, x0, y0, 1, 1, (uint8_t*) &color);
 	return color;
 }
 
 void hagl_hal_blit(uint16_t x0, uint16_t y0, bitmap_t *src)
 {
-	mipi_display_write(spi, x0, y0, src->width, src->height, (uint8_t*) src->buffer);
+	for (int y = 0; y < src->height; y++)
+		mipi_display_write(spi, x0, y0 + y, src->width, 1, (uint8_t*) src->pixels[y]);
 }
 
 void hagl_hal_hline(int16_t x0, int16_t y0, uint16_t width, color_t color)

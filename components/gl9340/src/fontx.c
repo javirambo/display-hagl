@@ -39,29 +39,26 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include "esp_log.h"
 #include "fontx.h"
 
-uint8_t fontx_meta(fontx_meta_t *meta, const uint8_t *font)
+const char * TAG = "fontx";
+
+uint8_t* fontx_meta(fontx_meta_t *meta, const uint8_t *font)
 {
-	//memcpy(meta->name, &font[FONTX_NAME], 8); // no me interesa, lo saco
 	meta->width = font[FONTX_WIDTH];
 	meta->height = font[FONTX_HEIGHT];
 	meta->type = font[FONTX_TYPE];
-	return 0;
+	return (uint8_t*) font;
 }
 
 uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t *font)
 {
 	uint32_t nc, bc, sb, eb;
-	uint8_t status;
 	const uint8_t *block_table;
-	fontx_meta_t meta;
 
-	status = fontx_meta(&meta, font);
-	if (0 != status)
-	{
-		return status;
-	}
+	fontx_meta_t meta;
+	fontx_meta(&meta, font);
 
 	glyph->width = meta.width;
 	glyph->height = meta.height;
@@ -106,5 +103,6 @@ uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t *font)
 		}
 	}
 
+	ESP_LOGE(TAG,"GLYPH NOT FOUND [%c]", (char)code);
 	return FONTX_ERR_GLYPH_NOT_FOUND;
 }

@@ -74,7 +74,7 @@ void hagl_hal_put_pixel(int16_t x0, int16_t y0, color_t color);
  *
  * @return NULL
  */
-bitmap_t* hagl_hal_init(void);
+void hagl_hal_init();
 
 /**
  * Blit given bitmap to the display

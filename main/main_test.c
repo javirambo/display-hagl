@@ -18,132 +18,86 @@
 
 static const char *TAG = "main";
 
+static SemaphoreHandle_t mutex;
+
 static void sleep()
 {
 	ESP_LOGI(TAG, "Heap despues: %d", esp_get_free_heap_size());
 	vTaskDelay(5000 / portTICK_RATE_MS);
-	gl_fill_screen(BLACK);
 	ESP_LOGI(TAG, "Heap antes  : %d", esp_get_free_heap_size());
 }
 
-// carga el jpg desde archivo a un bitmap
-void demo_1()
+void demo_task(void *params)
 {
-	bitmap_t chancha;
-	uint32_t err = gl_load_image("chancha-parada.jpg", &chancha);
+	int alto = 100;
+	int ancho = 100;
 
-	if (err != GL_OK)
-		ESP_LOGE(TAG, "error al cargar la imagen");
+	gl_fill_screen(RED);
 
-	gl_blit(80, 10, &chancha);
+	// cls
+	//for (uint16_t y = 0; y < alto; y++)
+	//	hagl_hal_hline(0, y, ancho, YELLOW);
 
-	gl_free_bitmap_buffer(&chancha);
-	sleep();
-}
+	bitmap_t bmp;
+	new_bitmap(ancho, alto, &bmp);
+	bmp.transparentColor = BLUE;
+	bmp.flags = BMP_TRANSPARENT;
+	bitmap_t bmp2;
+	new_bitmap(ancho, alto, &bmp2);
 
-// testea los colores y figuras (me cambiaba los colores)
-void demo_2()
-{
-	gl_fill_screen(OLIVE);
-	gl_fill_circle(160, 120, 80, MAROON);
-	gl_fill_rectangle(111, 111, 177, 177, ORANGEYEL);
-	gl_fill_rectangle(171, 171, 200, 207, ORANGE);
-	sleep();
-}
+	// fondo rojo del bmp:
+	for (int x = 0; x < bmp.width; x++)
+		for (int y = 0; y < bmp.height; y++)
+		{
+			bmp.pixels[y][x] = YELLOW;
+			bmp2.pixels[y][x] = RED;
+		}
 
-// carga la imagen jpg desde archivo, y la muestra en el display directamente
-void demo_3()
-{
-	gl_draw_rounded_rectangle(0, 0, 319, 239, 35, RED);
-	uint32_t err = gl_show_image_file(10, 10, "chancha-parada.jpg");
-	if (err != GL_OK)
-		ESP_LOGE(TAG, "error al cargar la imagen");
-	sleep();
-}
+	//dibujo sobre el bmp:
+	for (uint8_t x = 50; x < 75; x++)
+		for (uint8_t y = 50; y < 75; y++)
+		{
+			bmp.pixels[y][x] = BLUE;
+			bmp2.pixels[y + 15][x + 15] = GREEN;
+		}
 
-// muestra un pedacito de la imagen
-void demo_4()
-{
-	bitmap_t image;
-	gl_load_image("chancha-parada.jpg", &image);
-
-	uint16_t transparentColor = BLACK;
-
-	RECT r; // solo muestro este pedacito del bmp
-	set_rect_w(10, 10, 25, 25, &r);
-	gl_show_partial_image(90, 80, &image, &r, transparentColor);
-
-	gl_free_bitmap_buffer(&image);
-	sleep();
-}
-
-// para imagenes bajadas desde GIMP
-void demo_5()
-{
-	bitmap_t image;
-	gl_load_gimp_image(&chancha_parada, &image);
-	gl_blit(esp_random() % 320 - chancha_parada.width, esp_random() % 240 - chancha_parada.height, &image);
-	sleep();
-}
-
-// pruebo hacer scroll de la pantalla
-// COMO NO SE PUEDE LEER LA RAM DEL DISPLAY, VOY A USAR UN BITMAP PARA ESCRIBIR EN ÉL,
-// Y HACER UN BLIT CON CADA LINEA AGREGADA AL FINAL (simulo una terminal)
-void demo_6()
-{
-	gl_fill_screen(BLUE);
-//	RECT rect;
-//	set_rect_w(0, 0, DISPLAY_HEIGHT, DISPLAY_WIDTH, &rect);
-//	bitmap_t terminal;
-//	alloc_bitmap(&rect, &terminal);
-	terminal_t term;
-	gl_init_terminal(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, font6x9, YELLOW, BLUE, &term);
-	vTaskDelay(1000 / portTICK_RATE_MS);
-
-	char buf[100];
-	for (int i = 0; i < 15; ++i)
+	while (1)
 	{
-		//gl_terminal_print(&term, "HOLA ");
-		sprintf(buf, "RAND %d", i);
-		gl_terminal_print(&term, buf);
-
-		vTaskDelay(50 / portTICK_RATE_MS);
+		gl_blit(0, 0, &bmp);
+		vTaskDelay(666 / portTICK_RATE_MS);
+		gl_blit(0, 0, &bmp2);
+		vTaskDelay(666 / portTICK_RATE_MS);
 	}
-	gl_terminal_print(&term, "PENULTIMA");
-	vTaskDelay(1000 / portTICK_RATE_MS);
-	gl_terminal_print(&term, "FIN DE LINEA");
-	vTaskDelay(1000 / portTICK_RATE_MS);
 
-	//gl_fill_screen(BLUE);
+	vTaskDelete(NULL);
+}
 
-	/*gl_set_font(font6x9);
-	 gl_set_font_color( YELLOW, BLUE);
-	 gl_set_font_pos(20, 20);
-	 gl_put_text("HOLA");
-	 gl_put_text(" MONGO\n");
-	 gl_put_text("HOLA");
-	 gl_put_text(" mundo°!#$%&(()=?¡");*/
-
-	//gl_blit(160, 120, &cacho);
-	//free(terminal.buffer);
-	gl_destroy_terminal(&term);
-
-	sleep();
+/*
+ * Flushes the framebuffer to display in a loop. This demo is
+ * capped to 30 fps.
+ */
+void framebuffer_task(void *params)
+{
+	const TickType_t frequency = 1000 / 30 / portTICK_RATE_MS;
+	TickType_t last = xTaskGetTickCount();
+	while (1)
+	{
+		xSemaphoreTake(mutex, portMAX_DELAY);
+		gl_flush();
+		xSemaphoreGive(mutex);
+		vTaskDelayUntil(&last, frequency);
+	}
+	vTaskDelete(NULL);
 }
 
 void app_main()
 {
 	gl_init();
 	fs_init();
-	ESP_LOGI(TAG, "Heap al arrancar: %d", esp_get_free_heap_size());
 
-	while (1)
-	{
-		//demo_1();
-		//demo_2();
-		//demo_3();
-		//demo_4();
-		//demo_5();
-		demo_6();
-	}
+	mutex = xSemaphoreCreateMutex();
+
+	ESP_LOGI(TAG, "Heap al arrancar: %d", esp_get_free_heap_size());
+	xTaskCreatePinnedToCore(demo_task, "Demo", 16384, NULL, 1, NULL, 1);
+	xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 8192, NULL, 1, NULL, 0);
 }

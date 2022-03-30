@@ -1,37 +1,6 @@
 /*
- MIT License
-
- Copyright (c) 2018-2021 Mika Tuupola
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in all
- copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- SOFTWARE.
-
- -cut-
-
- This file is part of the HAGL graphics library:
- https://github.com/tuupola/hagl
-
- ... y modificada por Javier.
-
- SPDX-License-Identifier: MIT
+ * Javier 2022
  */
-
-#include "gl.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -45,6 +14,7 @@
 #include "bitmap.h"
 #include "clip.h"
 #include "jpeg_decomp.h"
+#include "gl.h"
 
 static const char *TAG = "gl";
 
@@ -66,7 +36,8 @@ typedef struct
 } tjpgd_iodev_t;
 
 static RECT clip_window = {
-	.x0 = 0, .y0 = 0, .x1 = DISPLAY_WIDTH - 1, .y1 = DISPLAY_HEIGHT - 1,
+	.x0 = 0, .y0 = 0,
+	.x1 = DISPLAY_WIDTH - 1, .y1 = DISPLAY_HEIGHT - 1,
 	.w = DISPLAY_WIDTH, .h = DISPLAY_HEIGHT
 };
 
@@ -74,7 +45,11 @@ static RECT clip_window = {
 static uint8_t workspace[JPG_WORKSPACE_SIZE] __attribute__((aligned(4)));
 
 // font actual que se usa para la pantalla.
-static font_screen_t font_actual;
+static terminal_t terminal_actual = {
+	.x = 0, .y = 0, .bg = BLACK, .fg = WHITE, .isTransparent = 0,
+	.rect.x0 = 0, .rect.y0 = 0, .rect.w = DISPLAY_WIDTH, .rect.h = DISPLAY_HEIGHT,
+	.rect.x1 = DISPLAY_WIDTH - 1, .rect.y1 = DISPLAY_HEIGHT - 1
+};
 
 static bool str_ends_with(const char *name, char *ext)
 {
@@ -91,29 +66,16 @@ color_t gl_color(uint8_t r, uint8_t g, uint8_t b)
 	return rgb565(r, g, b);
 }
 
-bitmap_t* gl_init()
+void gl_init()
 {
-#ifdef HAGL_HAS_HAL_INIT
-	bitmap_t *bb = hagl_hal_init();
+	hagl_hal_init();
 	gl_clear_screen();
-	return bb;
-#else
-    gl_clear_screen();
-    return NULL;
-#endif
 }
 
 void gl_flush()
 {
 #ifdef HAGL_HAS_HAL_FLUSH
-    gl_hal_flush();
-#endif
-}
-
-void gl_close()
-{
-#ifdef HAGL_HAS_HAL_CLOSE
-    gl_hal_close();
+	hagl_hal_flush();
 #endif
 }
 
@@ -139,40 +101,14 @@ void gl_put_pixel(int16_t x0, int16_t y0, color_t color)
 {
 	/* x0 or y0 is before the edge, nothing to do. */
 	if ((x0 < clip_window.x0) || (y0 < clip_window.y0))
-	{
 		return;
-	}
 
 	/* x0 or y0 is after the edge, nothing to do. */
 	if ((x0 > clip_window.x1) || (y0 > clip_window.y1))
-	{
 		return;
-	}
 
 	/* If still in bounds set the pixel. */
 	hagl_hal_put_pixel(x0, y0, color);
-}
-
-color_t gl_get_pixel(int16_t x0, int16_t y0)
-{
-	/* x0 or y0 is before the edge, nothing to do. */
-	if ((x0 < clip_window.x0) || (y0 < clip_window.y0))
-	{
-		return gl_color(0, 0, 0);
-	}
-
-	/* x0 or y0 is after the edge, nothing to do. */
-	if ((x0 > clip_window.x1) || (y0 > clip_window.y1))
-	{
-		return gl_color(0, 0, 0);
-	}
-
-#ifdef gl_HAS_HAL_GET_PIXEL
-	// esto está comentado porque el display no puede leer la memoria ram.
-    return hagl_hal_get_pixel(x0, y0);
-#else
-	return gl_color(0, 0, 0);
-#endif /* gl_HAS_HAL_GET_PIXEL */
 }
 
 inline void gl_clear_screen()
@@ -214,73 +150,26 @@ static unsigned int jpg_file_reader(JDEC *decoder, uint8_t *buffer, unsigned int
 }
 
 // copio cada rectangulo jpeg al destino que es el pedacito que le corresponde en el bmp.
-static int jpg_memcpy(JDEC *decoder, void *bitmap, JRECT *rectangle)
+static int jpg_memcpy(JDEC *decoder, void *buffer, JRECT *rectangle)
 {
 	tjpgd_iodev_t *device = (tjpgd_iodev_t*) decoder->device;
-	uint8_t *pimg = device->image->buffer;
-	uint8_t *pbmp = ((uint8_t*) bitmap);
-	int w = (rectangle->right - rectangle->left + 1) * 2;
-	int l = rectangle->left * 2;
+	color_t *bmp = (color_t*) buffer;
+	int ancho = rectangle->right - rectangle->left + 1;
 	for (int y = rectangle->top; y <= rectangle->bottom; y++)
-	{
-		memcpy(pimg + l + device->image->pitch * y, pbmp, w);
-		pbmp += w;
-	}
-	return 1;
-}
-
-/**
- * Lo usa el gl_draw_jpg
- */
-static unsigned int jpg_input(JDEC *decoder, uint8_t *buf, unsigned int len)
-{
-	tjpgd_iodev_t *device = (tjpgd_iodev_t*) decoder->device;
-
-	// Avoid running off end of array
-	if (device->array_index + len > device->array_size)
-	{
-		len = device->array_size - device->array_index;
-	}
-
-	// If buf is valid then copy len bytes to buffer
-	if (buf)
-		memcpy(buf, (const uint8_t*) (device->array_data + device->array_index), len);
-
-	// Move pointer
-	device->array_index += len;
-	return len;
-}
-
-/**
- * Lo usa el decoder para mostrar en pantalla
- * y el gl_draw_jpg
- */
-static int jpg_data_blit(JDEC *decoder, void *bitmap, JRECT *rectangle)
-{
-	tjpgd_iodev_t *device = (tjpgd_iodev_t*) decoder->device;
-	uint16_t width = (rectangle->right - rectangle->left) + 1;
-	uint16_t height = (rectangle->bottom - rectangle->top) + 1;
-
-	bitmap_t block = {
-		.width = width,
-		.height = height,
-		.depth = DISPLAY_DEPTH,
-		.pitch = width * (DISPLAY_DEPTH / 8),
-		.size = width * (DISPLAY_DEPTH / 8) * height,
-		.buffer = (uint8_t*) bitmap };
-
-	gl_blit(rectangle->left + device->x0, rectangle->top + device->y0, &block);
+		for (int x = 0; x < ancho; x++)
+			device->image->pixels[y][x + rectangle->left] = *bmp++;
 	return 1;
 }
 
 /*
  * Carga una imagen desde archivo al bmp.
- * TODO hacer una seleccion de tipo de decores dependiendo de la extension del archivo
+ * TODO hacer una seleccion de tipo de decodes dependiendo de la extension del archivo
  * (por ahora es solo para jpg)
  * OJO, HACER FREE DEL BUFFER DEL BITMAP!!
  */
-uint32_t gl_load_image(const char *filename, bitmap_t *bmp)
+bitmap_t* gl_load_image(const char *filename)
 {
+	bitmap_t *bmp = NULL;
 	JDEC decoder;
 	JRESULT result;
 	tjpgd_iodev_t device;
@@ -289,170 +178,40 @@ uint32_t gl_load_image(const char *filename, bitmap_t *bmp)
 	device.fp = fs_open_file(filename, "rb");
 
 	if (!str_ends_with(filename, ".jpg"))
-		return GL_ERR_FILE_IO;
+	{
+		ESP_LOGE(TAG, "ext file err");
+		return NULL;
+	}
 
 	if (!device.fp)
-		return GL_ERR_FILE_IO;
+	{
+		ESP_LOGE(TAG, "file err");
+		return NULL;
+	}
 
 	result = jd_prepare(&decoder, jpg_file_reader, workspace, JPG_WORKSPACE_SIZE, (void*) &device);
 	if (result == JDR_OK)
 	{
 		//-1- creo el bitmap con sus tamaños y cosas de la imagen:
-		bmp->width = decoder.width;
-		bmp->height = decoder.height;
-		bmp->depth = DISPLAY_DEPTH;
-		bmp->pitch = decoder.width * (DISPLAY_DEPTH / 8);
-		bmp->size = decoder.width * (DISPLAY_DEPTH / 8) * decoder.height;
-		bmp->buffer = malloc(bmp->size * DISPLAY_DEPTH / 8);
+		bmp = bitmap_new(decoder.width, decoder.height, NULL);
+
 		//-2- copio la imagen en el buffer:
 		device.image = bmp;
 		result = jd_decomp(&decoder, jpg_memcpy, 0);
 		if (JDR_OK != result)
 		{
 			fclose(device.fp);
-			return GL_ERR_TJPGD + result;
+			bitmap_delete(bmp);
+			return NULL;
 		}
 	}
 	else
 	{
 		fclose(device.fp);
-		return GL_ERR_TJPGD + result;
+		return NULL;
 	}
 	fclose(device.fp);
-	return GL_OK;
-}
-
-/*
- * Free solo del buffer del bitmap_t
- */
-void gl_free_bitmap_buffer(bitmap_t *bitmap)
-{
-	if (bitmap && bitmap->buffer)
-		free(bitmap->buffer);
-}
-
-/*
- * Por si el bitmap_t se creó con malloc
- */
-void gl_free_bitmap(bitmap_t *bitmap)
-{
-	if (bitmap)
-	{
-		if (bitmap->buffer)
-			free(bitmap->buffer);
-		free(bitmap);
-	}
-}
-
-/*
- * Carga una imagen desde archivo y muestra en el display.
- * * TODO determinar el tipo de imagen con la extension.
- *
- * Output will be clipped to the current clip window. Does not do
- * any scaling. Currently supports only baseline jpg images.
- */
-uint32_t gl_show_image_file(int16_t x0, int16_t y0, const char *filename)
-{
-	JDEC decoder;
-	JRESULT result;
-	tjpgd_iodev_t device;
-	device.x0 = x0;
-	device.y0 = y0;
-
-	if (!str_ends_with(filename, ".jpg"))
-		return GL_ERR_FILE_IO;
-
-	device.fp = fs_open_file(filename, "rb");
-	if (!device.fp)
-		return GL_ERR_FILE_IO;
-
-	result = jd_prepare(&decoder, jpg_file_reader, workspace, JPG_WORKSPACE_SIZE, (void*) &device);
-	if (result == JDR_OK)
-	{
-		/***** Muestra la imagen centrada, si x=-1 o y=-1 , @javier ****/
-		if (x0 < 0)
-			device.x0 = (DISPLAY_WIDTH - decoder.width) / 2;
-		if (y0 < 0)
-			device.y0 = (DISPLAY_HEIGHT - decoder.height) / 2;
-		result = jd_decomp(&decoder, jpg_data_blit, 0);
-		if (JDR_OK != result)
-		{
-			fclose(device.fp);
-			return GL_ERR_TJPGD + result;
-		}
-	}
-	else
-	{
-		fclose(device.fp);
-		return GL_ERR_TJPGD + result;
-	}
-
-	fclose(device.fp);
-	return GL_OK;
-}
-
-/**
- *  Muestra una imagen en el display.
- *  La imagen es un jpeg que viene en un buffer.
- *
- *  @param x			posicion x de la imagen (si es -1 la centra en X)
- *  @param y			posicion y de la imagen (si es -1 la centra en Y)
- *  @param jpeg_data	buffer con la imagen jpeg
- *  @param data_size	tamaño
- */
-uint32_t gl_show_jpeg_data(int16_t x, int16_t y, const uint8_t jpeg_data[], uint32_t data_size)
-{
-	tjpgd_iodev_t dev;
-	dev.array_index = 0;
-	dev.array_data = (uint8_t*) jpeg_data;
-	dev.array_size = data_size;
-	dev.x0 = x;
-	dev.y0 = y;
-
-	JDEC jdec;
-	// Analyse input data
-	JRESULT jresult = jd_prepare(&jdec, jpg_input, workspace, JPG_WORKSPACE_SIZE, (void*) &dev);
-
-	if (jresult == JDR_OK)
-	{
-		/***** Muestra la imagen centrada, si x=-1 o y=-1 , @javier ****/
-		if (x < 0)
-			dev.x0 = (DISPLAY_WIDTH - jdec.width) / 2;
-		if (y < 0)
-			dev.y0 = (DISPLAY_HEIGHT - jdec.height) / 2;
-		// Extract image and render
-		jresult = jd_decomp(&jdec, jpg_data_blit, 0);
-	}
-	else if (jresult == JDR_FMT3)
-	{
-		ESP_LOGE(TAG, "JPEG NO SOPORTADO. USAR NO PROGRESIVO");
-	}
-	return jresult;
-}
-
-/**
- *  Obtiene el tamaño de la imagen.
- *  La imagen es un jpeg que viene en un buffer.
- */
-uint32_t gl_get_jpeg_size(uint16_t *w, uint16_t *h, const uint8_t jpeg_data[], uint32_t data_size)
-{
-	tjpgd_iodev_t dev;
-	dev.array_index = 0;
-	dev.array_data = (uint8_t*) jpeg_data;
-	dev.array_size = data_size;
-
-	JDEC jdec;
-	if (JDR_OK == jd_prepare(&jdec, jpg_input, workspace, JPG_WORKSPACE_SIZE, (void*) &dev))
-	{
-		*w = jdec.width;
-		*h = jdec.height;
-	}
-	else
-	{
-		*w = 0;
-		*h = 0;
-	}
-	return GL_OK;
+	return bmp;
 }
 
 /*
@@ -462,7 +221,7 @@ uint32_t gl_get_jpeg_size(uint16_t *w, uint16_t *h, const uint8_t jpeg_data[], u
  *
  * (Accedo a los campos de la estructura del archivo GIMP mediante punteros)
  */
-uint32_t gl_load_gimp_image(void *gimp_struct, bitmap_t *bmp)
+bitmap_t* gl_load_gimp_image(void *gimp_struct)
 {
 	unsigned int *pgs = gimp_struct;
 	unsigned int width = *pgs++;
@@ -470,72 +229,13 @@ uint32_t gl_load_gimp_image(void *gimp_struct, bitmap_t *bmp)
 	unsigned int bytes_per_pixel = *pgs;
 	unsigned char *pixel_data = gimp_struct + sizeof(unsigned int) * 3;
 
-	ESP_LOGE(TAG, "%d", bytes_per_pixel);
-
 	// flag para no volver a invertir los datos de la imagen.
 	if (bytes_per_pixel == 0)
-		return GL_OK;
+		return NULL;
 	*pgs = 0;
 
-	bmp->width = width;
-	bmp->height = height;
-	bmp->size = width * height;
-	bmp->buffer = pixel_data;
-
-	uint16_t *p = (uint16_t*) bmp->buffer;
-	uint16_t *end = p + bmp->size;
-	while (p < end)
-	{
-		*p = (*p << 8) | (*p >> 8);
-		p++;
-	}
-	return GL_OK;
-}
-
-/**
- * Blit a bitmap to the display
- *
- * Output will be clipped to the current clip window.
- *
- * @param x0
- * @param y0
- * @param source pointer to a bitmap
- */
-void gl_blit(int16_t x0, int16_t y0, bitmap_t *source)
-{
-#ifdef HAGL_HAS_HAL_BLIT
-	/* Check if bitmap is inside clip windows bounds */
-	if ((x0 < clip_window.x0) || (y0 < clip_window.y0) || (x0 + source->width > clip_window.x1) || (y0 + source->height > clip_window.y1))
-	{
-		/* Out of bounds, use local pixel fallback. */
-		color_t color;
-		color_t *ptr = (color_t*) source->buffer;
-
-		for (uint16_t y = 0; y < source->height; y++)
-		{
-			for (uint16_t x = 0; x < source->width; x++)
-			{
-				color = *(ptr++);
-				gl_put_pixel(x0 + x, y0 + y, color);
-			}
-		}
-	}
-	else
-	{
-		/* Inside of bounds, can use HAL provided blit. */
-		hagl_hal_blit(x0, y0, source);
-	}
-#else
-    color_t color;
-    color_t *ptr = (color_t *) source->buffer;
-
-    for (uint16_t y = 0; y < source->height; y++) {
-        for (uint16_t x = 0; x < source->width; x++) {
-            color = *(ptr++);
-            gl_put_pixel(x0 + x, y0 + y, color);
-        }
-    }
-#endif
+	// voy a usar el buffer estatico del GIMP.
+	return bitmap_new(width, height, pixel_data);
 }
 
 /*
@@ -549,39 +249,10 @@ void gl_blit(int16_t x0, int16_t y0, bitmap_t *source)
  *
  * El RECT tiene que estar normalizado (x/y/ancho y alto)
  */
-uint32_t gl_show_partial_image(uint16_t x0, uint16_t y0, bitmap_t *image, RECT *rect, uint16_t transparentColor)
+void gl_blit(uint16_t x0, uint16_t y0, bitmap_t *image, RECT *rect)
 {
-	uint16_t *bmp = (uint16_t*) image->buffer;
-	int h = rect->h;
-	int w = rect->w;
-	int pitch = image->width - w;
-	bmp += rect->x0; // posiciono la x
-	bmp += (rect->y0 * image->width); // posiciono la y
-
-	for (int fy = 0; fy < h; fy++)
-	{
-		for (int fx = 0; fx < w; fx++)
-		{
-			if (*bmp != transparentColor)
-			{
-				gl_put_pixel(x0 + fx, y0 + fy, *bmp);
-			}
-			bmp++; // sig pixel horiz
-		}
-		bmp += pitch; // sig linea
-	}
-	return GL_OK;
+	hagl_hal_blit(x0, y0, image, rect);
 }
-
-#if 0
-// ESTO NO FUNCIONA PORQUE NO SE PUEDE LEER LA RAM DEL DISPLAY
-// OJO, El bmp target tiene que tener espacio en el buffer para guardar la pantalla.
-uint32_t save_screen(RECT *rect, bitmap_t *target)
-{
-	hagl_hal_get_pixel_data(rect, target->buffer);
-	return GL_OK;
-}
-#endif
 
 //////////////////////////////////////////////////////////////////////
 ////////// COSAS DE SHAPES Y DIBUJOS
@@ -589,14 +260,11 @@ uint32_t save_screen(RECT *rect, bitmap_t *target)
 
 void gl_draw_hline(int16_t x0, int16_t y0, uint16_t w, color_t color)
 {
-#ifdef HAGL_HAS_HAL_HLINE
 	int16_t width = w;
 
 	/* x0 or y0 is over the edge, nothing to do. */
 	if ((x0 > clip_window.x1) || (y0 > clip_window.y1) || (y0 < clip_window.y0))
-	{
 		return;
-	}
 
 	/* x0 is left of clip window, ignore start part. */
 	if (x0 < clip_window.x0)
@@ -607,20 +275,13 @@ void gl_draw_hline(int16_t x0, int16_t y0, uint16_t w, color_t color)
 
 	/* Everything outside clip window, nothing to do. */
 	if (width < 0)
-	{
 		return;
-	}
 
 	/* Cut anything going over right edge of clip window. */
 	if (((x0 + width) > clip_window.x1))
-	{
 		width = width - (x0 + width - clip_window.x1);
-	}
 
 	hagl_hal_hline(x0, y0, width, color);
-#else
-    hagl_draw_line(x0, y0, x0 + w, y0, color);
-#endif
 }
 
 /*
@@ -629,14 +290,11 @@ void gl_draw_hline(int16_t x0, int16_t y0, uint16_t w, color_t color)
  */
 void gl_draw_vline(int16_t x0, int16_t y0, uint16_t h, color_t color)
 {
-#ifdef HAGL_HAS_HAL_VLINE
 	int16_t height = h;
 
 	/* x0 or y0 is over the edge, nothing to do. */
 	if ((x0 > clip_window.x1) || (x0 < clip_window.x0) || (y0 > clip_window.y1))
-	{
 		return;
-	}
 
 	/* y0 is top of clip window, ignore start part. */
 	if (y0 < clip_window.y0)
@@ -647,20 +305,13 @@ void gl_draw_vline(int16_t x0, int16_t y0, uint16_t h, color_t color)
 
 	/* Everything outside clip window, nothing to do. */
 	if (height < 0)
-	{
 		return;
-	}
 
 	/* Cut anything going over right edge. */
 	if (((y0 + height) > clip_window.y1))
-	{
 		height = height - (y0 + height - clip_window.y1);
-	}
 
 	hagl_hal_vline(x0, y0, height, color);
-#else
-    hagl_draw_line(x0, y0, x0, y0 + h, color);
-#endif
 }
 
 /*
@@ -670,9 +321,7 @@ void gl_draw_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t color)
 {
 	/* Clip coordinates to fit clip window. */
 	if (false == clip_line(&x0, &y0, &x1, &y1, clip_window))
-	{
 		return;
-	}
 
 	int16_t dx;
 	int16_t sx;
@@ -692,9 +341,7 @@ void gl_draw_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t color)
 		gl_put_pixel(x0, y0, color);
 
 		if (x0 == x1 && y0 == y1)
-		{
 			break;
-		};
 
 		e2 = err + err;
 
@@ -714,7 +361,13 @@ void gl_draw_line(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t color)
 
 /*
  * Draw a rectangle with given color.
+ * El RECT tiene que estar normalizado
  */
+void gl_draw_rect(RECT *rect, color_t color)
+{
+	gl_draw_rectangle(rect->x0, rect->y0, rect->x1, rect->y1, color);
+}
+
 void gl_draw_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t color)
 {
 	/* Make sure x0 is smaller than x1. */
@@ -735,15 +388,11 @@ void gl_draw_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t c
 
 	/* x1 or y1 is before the edge, nothing to do. */
 	if ((x1 < clip_window.x0) || (y1 < clip_window.y0))
-	{
 		return;
-	}
 
 	/* x0 or y0 is after the edge, nothing to do. */
 	if ((x0 > clip_window.x1) || (y0 > clip_window.y1))
-	{
 		return;
-	}
 
 	uint16_t width = x1 - x0 + 1;
 	uint16_t height = y1 - y0 + 1;
@@ -756,7 +405,13 @@ void gl_draw_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t c
 
 /*
  * Draw a filled rectangle with given color.
+ * El RECT tiene que estar normalizado
  */
+void gl_fill_rect(RECT *rect, color_t color)
+{
+	gl_fill_rectangle(rect->x0, rect->y0, rect->x1, rect->y1, color);
+}
+
 void gl_fill_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t color)
 {
 	/* Make sure x0 is smaller than x1. */
@@ -777,15 +432,11 @@ void gl_fill_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t c
 
 	/* x1 or y1 is before the edge, nothing to do. */
 	if ((x1 < clip_window.x0) || (y1 < clip_window.y0))
-	{
 		return;
-	}
 
 	/* x0 or y0 is after the edge, nothing to do. */
 	if ((x0 > clip_window.x1) || (y0 > clip_window.y1))
-	{
 		return;
-	}
 
 	x0 = max(x0, clip_window.x0);
 	y0 = max(y0, clip_window.y0);
@@ -797,12 +448,8 @@ void gl_fill_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t c
 
 	for (uint16_t i = 0; i < height; i++)
 	{
-#ifdef HAGL_HAS_HAL_HLINE
 		/* Already clipped so can call HAL directly. */
 		hagl_hal_hline(x0, y0 + i, width, color);
-#else
-        hagl_draw_hline(x0, y0 + i, width, color);
-#endif
 	}
 }
 
@@ -1025,11 +672,9 @@ void gl_fill_ellipse(int16_t x0, int16_t y0, int16_t a, int16_t b, color_t color
 
 void gl_draw_polygon(int16_t amount, int16_t *vertices, color_t color)
 {
-
 	for (int16_t i = 0; i < amount - 1; i++)
-	{
 		gl_draw_line(vertices[(i << 1) + 0], vertices[(i << 1) + 1], vertices[(i << 1) + 2], vertices[(i << 1) + 3], color);
-	}
+
 	gl_draw_line(vertices[0], vertices[1], vertices[(amount << 1) - 2], vertices[(amount << 1) - 1], color);
 }
 
@@ -1125,6 +770,11 @@ void gl_fill_triangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2
 	gl_fill_polygon(3, vertices, color);
 }
 
+// el RECT tiene que estar normalizado.
+void gl_draw_rounded_rect(RECT *rect, int16_t r, color_t color)
+{
+	gl_draw_rounded_rectangle(rect->x0, rect->y0, rect->x1, rect->y1, r, color);
+}
 void gl_draw_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t r, color_t color)
 {
 
@@ -1149,15 +799,11 @@ void gl_draw_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 
 	/* x1 or y1 is before the edge, nothing to do. */
 	if ((x1 < clip_window.x0) || (y1 < clip_window.y0))
-	{
 		return;
-	}
 
 	/* x0 or y0 is after the edge, nothing to do. */
 	if ((x0 > clip_window.x1) || (y0 > clip_window.y1))
-	{
 		return;
-	}
 
 	/* Max radius is half of shortest edge. */
 	width = x1 - x0 + 1;
@@ -1205,6 +851,12 @@ void gl_draw_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 	}
 }
 
+// el RECT tiene que estar normalizado.
+void gl_fill_rounded_rect(RECT *rect, int16_t r, color_t color)
+{
+	gl_fill_rounded_rectangle(rect->x0, rect->y0, rect->x1, rect->y1, r, color);
+}
+
 void gl_fill_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t r, color_t color)
 {
 	uint16_t width, height;
@@ -1228,15 +880,11 @@ void gl_fill_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 
 	/* x1 or y1 is before the edge, nothing to do. */
 	if ((x1 < clip_window.x0) || (y1 < clip_window.y0))
-	{
 		return;
-	}
 
 	/* x0 or y0 is after the edge, nothing to do. */
 	if ((x0 > clip_window.x1) || (y0 > clip_window.y1))
-	{
 		return;
-	}
 
 	/* Max radius is half of shortest edge. */
 	width = x1 - x0 + 1;
@@ -1298,302 +946,140 @@ void gl_fill_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 
 void gl_set_font(const uint8_t *fx)
 {
-	font_actual.fx = (uint8_t*) fx;
+	terminal_actual.fx = fontx_meta(&(terminal_actual.meta), fx);
 }
 
 void gl_set_font_color(uint16_t fg, uint16_t bg)
 {
-	font_actual.fg = fg;
-	font_actual.bg = bg;
+	terminal_actual.fg = fg;
+	terminal_actual.bg = bg;
+}
+
+void gl_set_transparent()
+{
+	terminal_actual.isTransparent = 1;
+}
+
+void gl_clear_transparent()
+{
+	terminal_actual.isTransparent = 0;
 }
 
 void gl_set_font_pos(uint16_t x, uint16_t y)
 {
-	font_actual.x = clip_window.x0 + x;
-	font_actual.y = clip_window.y0 + y;
-}
-
-static uint8_t gl_put_char_into_bitmap(char code, font_screen_t *font, bitmap_t *destination)
-{
-	uint8_t isForeGround, status;
-	fontx_glyph_t glyph;
-	status = fontx_glyph(&glyph, (wchar_t) code, font->fx);
-	if (0 != status)
-	{
-		ESP_LOGE("*", "No esta el char=%02X en el font!", code);
-		return 0;
-	}
-	color_t *ptr = (color_t*) destination->buffer + font->x + font->y*destination->width;
-	int pitch = destination->width - glyph.width;
-
-	for (uint8_t y = 0; y < glyph.height; y++)
-	{
-		for (uint8_t x = 0; x < glyph.width; x++)
-		{
-			isForeGround = *(glyph.buffer + x / 8) & (0x80 >> (x % 8));
-			if (isForeGround)
-			{
-				*(ptr++) = font->fg;
-			}
-			else
-			{
-				*(ptr++) = font->bg;
-			}
-		}
-		glyph.buffer += glyph.pitch;
-		ptr += pitch;
-	}
-	return glyph.width;
-}
-
-static uint8_t gl_put_char(char code, font_screen_t *font, RECT *window)
-{
-	uint8_t isForeGround, status;
-	color_t buffer[GL_CHAR_BUFFER_SIZE];
-	fontx_glyph_t glyph;
-
-	status = fontx_glyph(&glyph, (wchar_t) code, font->fx);
-
-	if (0 != status)
-	{
-		return 0;
-	}
-
-	bitmap_t bitmap = {
-		.width = glyph.width,
-		.height = glyph.height,
-		.depth = DISPLAY_DEPTH };
-
-	bitmap_init(&bitmap, (uint8_t*) buffer);
-
-	color_t *ptr = (color_t*) bitmap.buffer;
-
-	for (uint8_t y = 0; y < glyph.height; y++)
-	{
-		for (uint8_t x = 0; x < glyph.width; x++)
-		{
-			isForeGround = *(glyph.buffer + x / 8) & (0x80 >> (x % 8));
-			if (isForeGround)
-			{
-				*(ptr++) = font->fg;
-			}
-			else
-			{
-				*(ptr++) = font->bg;
-			}
-		}
-		glyph.buffer += glyph.pitch;
-	}
-
-	gl_blit(window->x0 + font->x, window->y0 + font->y, &bitmap);
-
-	return bitmap.width;
-}
-
-/*
- *
- */
-static int gl_put_text_into_bitmap(const char *str, font_screen_t *font, bitmap_t *destination)
-{
-	char temp;
-	//int err = 0;
-
-	fontx_meta_t meta;
-	fontx_meta(&meta, font->fx);
-	ESP_LOGI("*", "meta -> w=%d w=%d, str=%s", meta.height, meta.width, str);
-
-	do
-	{
-		temp = *str++;
-		/*if (13 == temp || 10 == temp)
-		 {
-		 font->x = 0;
-		 font->y += meta.height;
-		 }
-		 else
-		 {*/
-		// verifico que no este fuera de la ventana verticalmente:
-		/*if (font->y + meta.height > window->h)
-		 {
-		 font->bg = RED;
-		 err++;
-		 }*/
-		// por ahora marco en ROJO si se pasa de linea....
-		//font->x += gl_put_char(temp, font, window);
-		font->x += gl_put_char_into_bitmap(temp, font, destination);
-		//ESP_LOGI("*", "char=%c | x=%d", temp, font->x);
-		//}
-	} while (*str != 0);
-	return 0; // retorna 0=OK o la cantidad de lineas que se pasó de la ventana
-}
-
-static int gl_put_text(const char *str, font_screen_t *font, RECT *window)
-{
-	char temp;
-	uint8_t status;
-	fontx_meta_t meta;
-	int err = 0;
-
-	status = fontx_meta(&meta, font->fx);
-	if (0 != status)
-	{
-		return -1; // ERROR, font desconocida? rota?
-	}
-
-	do
-	{
-		temp = *str++;
-		if (13 == temp || 10 == temp)
-		{
-			font->x = 0;
-			font->y += meta.height;
-		}
-		else
-		{
-			// verifico que no este fuera de la ventana verticalmente:
-			if (font->y + meta.height > window->h)
-			{
-				font->bg = RED;
-				err++;
-			}
-			// por ahora marco en ROJO si se pasa de linea....
-			font->x += gl_put_char(temp, font, window);
-		}
-	} while (*str != 0);
-	return err; // retorna 0=OK o la cantidad de lineas que se pasó de la ventana
-}
-
-// imprime en pantalla, pero dentro de la ventana clip_window
-int gl_print(const char *str)
-{
-	return gl_put_text(str, &font_actual, &clip_window);
+	terminal_actual.x = clip_window.x0 + x;
+	terminal_actual.y = clip_window.y0 + y;
 }
 
 // mete en el bitmap la letra 'code' de la font 'font'
 // el bitmap tiene que tener espacio para almacenar la font (del tamaño fontY*X*2)
-uint8_t gl_get_glyph(char code, color_t fg, color_t bg, bitmap_t *bitmap, uint8_t *font)
+static bitmap_t* gl_get_glyph(terminal_t *term, char code)
 {
-	uint8_t status, isForeGround;
 	fontx_glyph_t glyph;
+	if (0 != fontx_glyph(&glyph, (wchar_t) code, term->fx))
+		return NULL; // no existe ese caracter!
 
-	status = fontx_glyph(&glyph, code, font);
+	char buf[glyph.width * glyph.height * 2];
+	bitmap_t *bitmap = bitmap_new(glyph.width, glyph.height, buf);
+	if (term->isTransparent)
+		bitmap->transparentColor = term->bg;
 
-	if (0 != status)
-	{
-		return status;
-	}
-
-	/* Initialise bitmap dimensions. */
-	bitmap->depth = DISPLAY_DEPTH;
-	bitmap->width = glyph.width;
-	bitmap->height = glyph.height;
-	bitmap->pitch = bitmap->width * (bitmap->depth / 8);
-	bitmap->size = bitmap->pitch * bitmap->height;
-
-	color_t *ptr = (color_t*) bitmap->buffer;
-
+	uint8_t isForeGround;
 	for (uint8_t y = 0; y < glyph.height; y++)
 	{
 		for (uint8_t x = 0; x < glyph.width; x++)
 		{
-			isForeGround = *(glyph.buffer) & (0x80 >> (x % 8));
+			isForeGround = *(glyph.buffer + x / 8) & (0x80 >> (x % 8));
 			if (isForeGround)
-			{
-				*(ptr++) = fg;
-			}
+				bitmap->pixels[y][x] = term->fg;
 			else
-			{
-				*(ptr++) = bg;
-			}
+				bitmap->pixels[y][x] = term->bg;
 		}
 		glyph.buffer += glyph.pitch;
 	}
-
-	return 0;
+	return bitmap;
 }
 
-void gl_init_terminal(int x, int y, int w, int h, const uint8_t *fx, color_t fg, color_t bg, terminal_t *terminal)
+// solo imprimo dentro del rect definido en la terminal.
+// si el texto quiere irse debajo de la linea bottom del window,
+// se hará un scroll del rectangulo.
+static void gl_put_text(terminal_t *term, const char *str)
 {
-	// obtengo tamaño del alto de la font (necesito que el buffer sea una linea mas grande)
-	fontx_meta_t meta;
-	fontx_meta(&meta, fx);
-
-	// guardo la font y valores calculados de linea
-	terminal->font.fx = (uint8_t*) fx;
-	terminal->font.fg = fg;
-	terminal->font.bg = bg;
-	terminal->font.x = 0;
-	terminal->font.y = 0;
-	terminal->line_max = h / meta.height; // calculo cant de lineas
-	terminal->line_nbr = 0;
-	terminal->line_h = meta.height;
-
-	//terminal->rect = calloc(1, sizeof(RECT));
-	terminal->bmp = calloc(1, sizeof(bitmap_t)); // tamaño para la estructura solamante
-
-	// creo buffers para el bitmap (1 linea mas grande):
-	RECT rec;
-	set_rect_w(x, y, w, h + meta.height, &rec);
-	alloc_bitmap(&rec, terminal->bmp); // tamaño para el buffer del bitmap
-
-	if (terminal->bmp->buffer == NULL)
+	char code;
+	while (*str != 0)
 	{
-		// si el area de pantalla es muy grande y no tengo memoria esto explota aca!
-		ESP_LOGE(TAG, "NO PUDE ALOJAR MEMORIA PARA LA TERMINAL");
+		code = *str++;
+
+		// los ENTERS modifican la posicion,
+		// y verifico que no se imprima fuera de la ventana horizontalmente:
+		if (13 == code || 10 == code || term->x + term->meta.width > term->rect.w)
+		{
+			term->x = 0;
+			term->y += term->meta.height;
+		}
+
+		// verifico fuera de ventana verticalmente:
+		if (term->y + term->meta.height > term->rect.h)
+		{
+			hagl_hal_scroll(SCROLL_UP, &(term->rect), term->meta.height, term->bg);
+			term->x = 0;
+			term->y -= term->meta.height;
+		}
+
+		// busco el bitmap de la letra a mostrar:
+		bitmap_t *bmp = gl_get_glyph(term, code);
+		if (bmp)
+		{
+			gl_blit(term->rect.x0 + term->x, term->rect.y0 + term->y, bmp, NULL);
+			term->x += term->meta.width;
+			bitmap_delete(bmp);
+		}
 	}
-
-	// lleno con color de fondo y muestro en pantalla: clear screen
-	memset((color_t*) terminal->bmp->buffer, bg, terminal->bmp->height * terminal->bmp->width);
-	gl_blit(0, 0, terminal->bmp);
-
-	//gl_fill_rectangle(x, y, w - 1, h - 1, bg);
 }
 
-// TODO averiguar cuantos \n hay para saber cuanto escrolear.
-// por ahora avanza una linea con cada print
-int gl_terminal_print(terminal_t *term, char *text)
+// imprime en pantalla, pero dentro de la ventana clip_window
+void gl_print(const char *text)
 {
-	int y = 0;
-	term->font.y = term->line_nbr * term->line_h;
-	term->font.x = 0; //siempre comienza en la 1ra col
-	gl_put_text_into_bitmap(text, &(term->font), term->bmp);
-
-	//-1- scroll 1 linea
-	if (term->line_nbr > term->line_max)
-	{
-		// en lugar de scrolear, pego el bitmap mas arriba que el top
-		// (valores negatidos se descartan en gl_put_pixel)
-
-		//vert_scroll_bitmap(term->bmp, term->line_h);
-		y = -term->line_h;
-	}
-	else
-		term->line_nbr++;
-
-	gl_blit(0, y, term->bmp);
-
-	//-2-setear x,y abajo de todo
-	//gl_put_text_into_bitmap(text, &(term->font), term->bmp);
-	//-3- print de la ultima linea
-	//TODO cambiar 0,0 por la window
-	//gl_blit(0, 0, term->bmp);
-	return 0;
+	gl_put_text(&terminal_actual, text);
 }
 
-void gl_destroy_terminal(terminal_t *terminal)
+// se pueden generar terminales diferentes a la por defecto.
+void gl_terminal_print(terminal_t *term, char *text)
+{
+	gl_put_text(term, text);
+}
+
+// Podés dividir la pantalla en una zona de texto tipo terminal, donde las letras fuera de los
+// márgenes hacen que se acomode el texto.
+// Importante: hay que eliminar la terminal con terminal_delete
+terminal_t* gl_terminal_new(int tx, int ty, int tw, int th, const uint8_t *fx, color_t fg, color_t bg)
+{
+	terminal_t *terminal = malloc(sizeof(terminal_t));
+
+	// guardo cosas de la font, ventana, etc:
+	fontx_meta(&(terminal->meta), fx);
+	terminal->rect.x0 = tx;
+	terminal->rect.y0 = ty;
+	terminal->rect.w = tw;
+	terminal->rect.h = th;
+	terminal->rect.x1 = tx + tw;
+	terminal->rect.y1 = ty + th;
+	terminal->fx = (uint8_t*) fx;
+	terminal->fg = fg;
+	terminal->bg = bg;
+	terminal->x = 0;
+	terminal->y = 0;
+
+	// borro la pantalla que ocupa la terminal:
+	gl_fill_rect(&(terminal->rect), bg);
+
+	return terminal;
+}
+
+void gl_terminal_delete(terminal_t *terminal)
 {
 	if (terminal)
-	{
-		if (terminal->bmp->buffer)
-		{
-			free(terminal->bmp->buffer);
-			terminal->bmp->buffer = 0;
-		}
-		//free(terminal->rect);
-		//terminal->rect = 0;
-		free(terminal->bmp);
-		terminal->bmp = 0;
-	}
+		free(terminal);
 }
 
 //////////////////////////////////////////////////////////////////////

@@ -1,2 +1,2 @@
-idf_component_register(SRCS "main_test.c" 
+idf_component_register(SRCS "main_test4.c" 
                     INCLUDE_DIRS ".")

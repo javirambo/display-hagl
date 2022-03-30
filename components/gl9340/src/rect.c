@@ -43,3 +43,30 @@ void set_rect_w(int x, int y, int w, int h, RECT *rec)
 	rec->w = w;
 	rec->h = h;
 }
+
+void set_rect(int w, int h, RECT *rec)
+{
+	set_rect_w(0, 0, w, h, rec);
+}
+
+void grow_rect_w(RECT *rec, int size)
+{
+	rec->x0 -= size;
+	rec->x1 += size;
+	rec->y0 -= size;
+	rec->y1 += size;
+	rec->w += 2;
+	rec->h += 2;
+}
+
+void resize_rect(RECT *rec, int size)
+{
+	rec->x0 -= size;
+	rec->x1 += size;
+	rec->y0 -= size;
+	rec->y1 += size;
+	rec->w += size;
+	rec->w += size;
+	rec->h += size;
+	rec->h += size;
+}

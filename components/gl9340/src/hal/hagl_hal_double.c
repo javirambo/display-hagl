@@ -1,172 +1,138 @@
 /*
-
- MIT License
-
- Copyright (c) 2019-2020 Mika Tuupola
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in all
- copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- SOFTWARE.
-
- -cut-
-
- This file is part of the MIPI DCS HAL for HAGL graphics library:
- https://github.com/tuupola/hagl_esp_mipi/
-
- SPDX-License-Identifier: MIT
-
- -cut-
-
- This is the HAL used when double buffering is enabled. The GRAM of the
- display driver chip is the framebuffer. The memory allocated by this HAL
- is the back buffer. Total two buffers.
-
- Note that all coordinates are already clipped in the main library itself.
- HAL does not need to validate the coordinates, they can alway be assumed
- valid.
-
+ Javier
  */
-
 #include "sdkconfig.h"
+
+#ifdef CONFIG_HAGL_HAL_USE_DOUBLE_BUFFERING
+
+#include <esp_log.h>
 #include "hal/hagl_hal.h"
 #include "hal/mipi_display.h"
 #include "bitmap.h"
+#include <freertos/semphr.h>
 
-#ifdef CONFIG_HAGL_HAL_USE_DOUBLE_BUFFERING
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
 static SemaphoreHandle_t mutex;
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
-static uint8_t *buffer1;
+#endif
 
-static bitmap_t fb = {
-	.width = DISPLAY_WIDTH,
-	.height = DISPLAY_HEIGHT,
-	.depth = DISPLAY_DEPTH,
-};
-
+static bitmap_t *fore_bitmap;
 static spi_device_handle_t spi;
-static const char *TAG = "hagl_esp_mipi";
+//static const char *TAG = "hagl_esp_mipi";
 
-bitmap_t* hagl_hal_init(void)
+void hagl_hal_init()
 {
 	mipi_display_init(&spi);
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    mutex = xSemaphoreCreateMutex();
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
-
-	ESP_LOGI(
-			TAG, "Largest (MALLOC_CAP_DMA | MALLOC_CAP_32BIT) block before init: %d",
-			heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_32BIT)
-			);
-
-	int size = BITMAP_SIZE(DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DEPTH);
-	buffer1 = (uint8_t*) heap_caps_malloc(size, MALLOC_CAP_DMA);
-	if (NULL == buffer1)
-	{
-		ESP_LOGE(TAG, "NO ALCANZA LA MEMORIA PARA EL BUFFER de %d", size);
-	}
-
-	ESP_LOGI(TAG, "Largest (MALLOC_CAP_DMA | MALLOC_CAP_32BIT) block after init: %d",
-			heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_32BIT));
-
-	heap_caps_print_heap_info(MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
-
-	bitmap_init(&fb, buffer1);
-
-	return &fb;
+	mutex = xSemaphoreCreateMutex();
+#endif
+	fore_bitmap = bitmap_new(DISPLAY_WIDTH, DISPLAY_HEIGHT, NULL);
 }
 
 void hagl_hal_flush()
 {
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    /* Flush the whole back buffer with locking. */
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    mipi_display_write(spi, 0, 0, fb.width, fb.height, (uint8_t *) fb.buffer);
-    xSemaphoreGive(mutex);
-#else
-	/* Flush the whole back buffer. */
-	mipi_display_write(spi, 0, 0, fb.width, fb.height, (uint8_t*) fb.buffer);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
+	xSemaphoreTake(mutex, portMAX_DELAY);
+#endif
+
+	for (int y = 0; y < fore_bitmap->height; y++)
+		mipi_display_write(spi, 0, y, fore_bitmap->width, 1, (uint8_t*) fore_bitmap->pixels[y]);
+
+#ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
+	xSemaphoreGive(mutex);
+#endif
 }
 
 void hagl_hal_put_pixel(int16_t x0, int16_t y0, color_t color)
 {
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreTake(mutex, portMAX_DELAY);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
-	color_t *ptr = (color_t*) (fb.buffer + fb.pitch * y0 + (fb.depth / 8) * x0);
-	*ptr = color;
+	xSemaphoreTake(mutex, portMAX_DELAY);
+#endif
+
+	fore_bitmap->pixels[y0][x0] = color;
+
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreGive(mutex);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
+	xSemaphoreGive(mutex);
+#endif
 }
 
-void hagl_hal_blit(uint16_t x0, uint16_t y0, bitmap_t *src)
+// hace un scroll de la pantalla, solo en la ventana dada.
+void hagl_hal_scroll(uint8_t direction, RECT *window, uint16_t pixels, color_t background_color)
+{
+	for (int i = 0; i < pixels; i++)
+	{
+		// escrolea el bitmap en la direccion dada, solo un pixel,
+		bitmap_shift(direction, window, fore_bitmap);
+		// debo rellenar la linea o columna liberada con el color de fondo:
+		switch (direction)
+		{
+			case SCROLL_UP:
+				hagl_hal_hline(window->x0, window->y0 + window->h - 1, window->w, background_color);
+				break;
+			case SCROLL_DOWN:
+				hagl_hal_hline(window->x0, window->y0, window->w, background_color);
+				break;
+			case SCROLL_LEFT:
+				hagl_hal_vline(window->x0 + window->w - 1, window->y0, window->h, background_color);
+				break;
+			case SCROLL_RIGHT:
+				hagl_hal_vline(window->x0, window->y0, window->h, background_color);
+				break;
+		}
+	}
+}
+
+void hagl_hal_blit(uint16_t x0, uint16_t y0, bitmap_t *src, RECT *rect)
 {
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreTake(mutex, portMAX_DELAY);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
-	bitmap_blit(x0, y0, src, &fb);
+	xSemaphoreTake(mutex, portMAX_DELAY);
+#endif
+
+	bitmap_blit(x0, y0, src, fore_bitmap, rect);
+
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreGive(mutex);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
+	xSemaphoreGive(mutex);
+#endif
 }
 
 void hagl_hal_scale_blit(uint16_t x0, uint16_t y0, uint16_t w, uint16_t h, bitmap_t *src)
 {
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreTake(mutex, portMAX_DELAY);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
-	bitmap_scale_blit(x0, y0, w, h, src, &fb);
+	xSemaphoreTake(mutex, portMAX_DELAY);
+#endif
+	// TODO
+	//bitmap_scale_blit(x0, y0, w, h, src, &fore_bitmap);
+
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreGive(mutex);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
+	xSemaphoreGive(mutex);
+#endif
 }
 
 void hagl_hal_hline(int16_t x0, int16_t y0, uint16_t width, color_t color)
 {
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreTake(mutex, portMAX_DELAY);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
-	color_t *ptr = (color_t*) (fb.buffer + fb.pitch * y0 + (fb.depth / 8) * x0);
-	for (uint16_t x = 0; x < width; x++)
-	{
-		*ptr++ = color;
-	}
+	xSemaphoreTake(mutex, portMAX_DELAY);
+#endif
+
+	for (uint16_t x = x0; x < x0 + width; x++)
+		fore_bitmap->pixels[y0][x] = color;
+
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreGive(mutex);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
+	xSemaphoreGive(mutex);
+#endif
 }
 
 void hagl_hal_vline(int16_t x0, int16_t y0, uint16_t height, color_t color)
 {
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreTake(mutex, portMAX_DELAY);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
-	color_t *ptr = (color_t*) (fb.buffer + fb.pitch * y0 + (fb.depth / 8) * x0);
-	for (uint16_t y = 0; y < height; y++)
-	{
-		*ptr = color;
-		ptr += fb.pitch / (fb.depth / 8);
-	}
+	xSemaphoreTake(mutex, portMAX_DELAY);
+#endif
+
+	for (uint16_t y = y0; y < y0 + height; y++)
+		fore_bitmap->pixels[y][x0] = color;
+
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
-    xSemaphoreGive(mutex);
-#endif /* CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING */
+	xSemaphoreGive(mutex);
+#endif
 }
 
 #endif /* CONFIG_HAGL_HAL_USE_DOUBLE_BUFFERING */
-

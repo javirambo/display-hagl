@@ -1,34 +1,5 @@
 /*
- MIT License
-
- Copyright (c) 2018-2021 Mika Tuupola
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in all
- copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- SOFTWARE.
-
- -cut-
-
- This file is part of the HAGL graphics library:
- https://github.com/tuupola/hagl
-
- ... y modificada por Javier.
-
- SPDX-License-Identifier: MIT
+ * Javier 2022
  */
 
 #ifndef _gl_H
@@ -41,18 +12,12 @@ extern "C"
 
 #include <stdint.h>
 #include <stddef.h>
-
 #include "hal/hagl_hal.h"
 #include "colors.h"
 #include "rect.h"
 #include "bitmap.h"
 #include "rect.h"
 #include "fontx.h"
-
-#define GL_OK                  (0)
-#define GL_ERR_GENERAL         (1)
-#define GL_ERR_FILE_IO         (2)
-#define GL_ERR_TJPGD           (100)
 
 //////////////////////////////////////////////////////////////////////
 ////////// FUNCIONES GENERALES
@@ -62,7 +27,7 @@ extern "C"
  * Inicializa el display (el driver SPI) y envía settings al display.
  * Si tiene doble o triple buffers, los crea.
  */
-bitmap_t* gl_init();
+void gl_init();
 
 /*
  * Solo se usa con doble o triple buffer.
@@ -70,11 +35,6 @@ bitmap_t* gl_init();
  * Debe llamarse desde una tarea cada N frames por segundo.
  */
 void gl_flush();
-
-/*
- * (Aparentemente no lo usa nadie....ni está implementado....)
- */
-void gl_close();
 
 /**
  * Convert RGB to color
@@ -121,43 +81,13 @@ void gl_fill_screen(color_t color);
  */
 void gl_put_pixel(int16_t x0, int16_t y0, color_t color);
 
-/**
- * Get a single pixel
- *
- * Input will be clipped to the current clip window. In case of
- * error or if HAL does not support this feature returns black.
- * @param x0
- * @param y0
- * @return color at the given location
- */
-color_t gl_get_pixel(int16_t x0, int16_t y0);
-
 //////////////////////////////////////////////////////////////////////
 ////////// FUNCIONES PARA IMAGENES
 //////////////////////////////////////////////////////////////////////
 
-void gl_blit(int16_t x0, int16_t y0, bitmap_t *bitmap);
-
-uint32_t gl_get_jpeg_size(uint16_t *w, uint16_t *h, const uint8_t jpeg_data[], uint32_t data_size);
-
-uint32_t gl_show_jpeg_data(int16_t x, int16_t y, const uint8_t jpeg_data[], uint32_t data_size);
-
-uint32_t gl_show_image_file(int16_t x0, int16_t y0, const char *filename);
-
-uint32_t gl_show_partial_image(uint16_t x0, uint16_t y0, bitmap_t *bitmap, RECT *img_rect, uint16_t transparentColor);
-
-uint32_t gl_load_gimp_image(void *gimp_img, bitmap_t *bmp);
-
-#if 0
-// ESTO NO FUNCIONA PORQUE NO SE PUEDE LEER LA RAM DEL DISPLAY
-uint32_t save_screen(RECT *rect, bitmap_t *target);
-#endif
-
-// OJO HACER FREE AL BMP!
-uint32_t gl_load_image(const char *filename, bitmap_t *bitmap);
-
-void gl_free_bitmap_buffer(bitmap_t *bitmap);
-void gl_free_bitmap(bitmap_t *bitmap);
+void gl_blit(uint16_t x0, uint16_t y0, bitmap_t *image, RECT *rect);
+bitmap_t* gl_load_gimp_image(void *gimp_img);
+bitmap_t* gl_load_image(const char *filename);
 
 //////////////////////////////////////////////////////////////////////
 ////////// FUNCIONES PARA DIBUJOS
@@ -212,6 +142,7 @@ void gl_draw_vline(int16_t x0, int16_t y0, uint16_t height, color_t color);
  * @param color
  */
 void gl_draw_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t color);
+void gl_draw_rect(RECT *rect, color_t color);
 
 /**
  * Draw a filled rectangle
@@ -225,6 +156,7 @@ void gl_draw_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t c
  * @param color
  */
 void gl_fill_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t color);
+void gl_fill_rect(RECT *rect, color_t color);
 
 /**
  * Draw a circle
@@ -353,6 +285,7 @@ void gl_fill_triangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2
  * @param color
  */
 void gl_draw_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t r, color_t color);
+void gl_draw_rounded_rect(RECT *rect, int16_t r, color_t color);
 
 /**
  * Draw a filled rounded rectangle
@@ -367,6 +300,7 @@ void gl_draw_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
  * @param color
  */
 void gl_fill_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t r, color_t color);
+void gl_fill_rounded_rect(RECT *rect, int16_t r, color_t color);
 
 //////////////////////////////////////////////////////////////////////
 /////// FUNCIONES PARA TEXTO
@@ -374,33 +308,26 @@ void gl_fill_rounded_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, i
 
 typedef struct
 {
-	uint16_t x; 	// posicion actual de la font
-	uint16_t y; 	//  "
-	color_t bg; 	// color de fondo
-	color_t fg; 	// color de la letra
-	uint8_t *fx;	// font seleccionada
-} font_screen_t;
-
-typedef struct
-{
-	//RECT *rect;
-	bitmap_t *bmp;
-	font_screen_t font;
-	int line_nbr;  	// numero de linea que se esta imprimiendo, si se pasa del max hace scroll.
-	int line_max; 	// lineas verticales maximas.
-	int line_h; 	// alto de la linea (cant de pixels a escrolar)
+	uint16_t x; 			// posicion actual de la font
+	uint16_t y; 			//  "
+	color_t bg; 			// color de fondo
+	color_t fg; 			// color de la letra
+	uint8_t isTransparent;	// eso
+	uint8_t *fx;			// font seleccionada
+	fontx_meta_t meta; 		// datos de la font
+	RECT rect;				// ventana de pantalla que usara la terminal
 } terminal_t;
 
 void gl_set_font(const uint8_t *font);
 void gl_set_font_color(color_t fg, color_t bg);
+void gl_set_transparent();
+void gl_clear_transparent();
 void gl_set_font_pos(uint16_t x, uint16_t y);
-int gl_print(const char *str);
+void gl_print(const char *str);
 
-uint8_t gl_get_glyph(char code, color_t fg, color_t bg, bitmap_t *bitmap, uint8_t *fx);
-
-void gl_init_terminal(int x, int y, int w, int h, const uint8_t *fx, color_t fg, color_t bg, terminal_t *term);
-int gl_terminal_print(terminal_t *term, char *text);
-void gl_destroy_terminal(terminal_t *term);
+terminal_t* gl_terminal_new(int x, int y, int w, int h, const uint8_t *fx, color_t fg, color_t bg);
+void gl_terminal_print(terminal_t *term, char *text);
+void gl_terminal_delete(terminal_t *term);
 
 #ifdef __cplusplus
 }

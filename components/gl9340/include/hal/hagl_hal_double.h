@@ -62,6 +62,11 @@ extern "C"
 #define HAGL_HAS_HAL_VLINE
 #define HAGL_HAS_HAL_FLUSH
 
+typedef enum
+{
+	SCROLL_UP, SCROLL_DOWN, SCROLL_LEFT, SCROLL_RIGHT
+} scroll_direction_t;
+
 /**
  * Put a pixel
  *
@@ -76,7 +81,7 @@ void hagl_hal_put_pixel(int16_t x0, int16_t y0, color_t color);
  *
  * @return pointer to he backbuffer bitmap
  */
-bitmap_t* hagl_hal_init(void);
+void hagl_hal_init();
 
 /**
  * Blit given bitmap to the display
@@ -84,8 +89,10 @@ bitmap_t* hagl_hal_init(void);
  * @param x0 X coordinate
  * @param y0 Y coorginate
  * @param src Pointer to the source bitmap
+ * muestra en (x0,y0) de la pantalla una porcion del bitmap dado por el rectangulo RECT
  */
-void hagl_hal_blit(uint16_t x0, uint16_t y0, bitmap_t *src);
+//void hagl_hal_blit(uint16_t x0, uint16_t y0, bitmap_t *src);
+void hagl_hal_blit(uint16_t x0, uint16_t y0, bitmap_t *src, RECT *rect);
 
 /**
  * Blit given bitmap scaled to given dimensions to the display
@@ -120,7 +127,7 @@ void hagl_hal_vline(int16_t x0, int16_t y0, uint16_t h, color_t color);
  * Flush back buffer to the display
  */
 void hagl_hal_flush();
-
+void hagl_hal_scroll(uint8_t direction, RECT *window, uint16_t pixels, color_t background_color);
 void hagl_hal_get_pixel_data(RECT *rect, uint8_t *destination_buffer);
 
 #ifdef __cplusplus
