@@ -374,21 +374,46 @@ void demo_10()
 	tiempito();
 }
 
+void mostrar_digito(int x, int y, bitmap_t *bmp, int digito, int ancho)
+{
+	RECT r;
+	set_rect_w(ancho * digito, 0, ancho, bmp->height, &r);
+	gl_blit(x, y, bmp, &r);
+}
+
+// usa un bitmap como FONT (por ahora solo numerico)
+void demo_11()
+{
+	gl_fill_screen(WHITE);
+
+	// (imagen con todos los numeros del mismo ancho)
+	bitmap_t *image = gl_load_image("Font-Agency-50.jpg");
+
+	for (int var = 0; var <= 9; ++var)
+	{
+		mostrar_digito(100, 100, image, var, 28);
+		gl_flush();
+		vTaskDelay(666 / portTICK_RATE_MS);
+	}
+	bitmap_delete(image);
+}
+
 void demo_task(void *params)
 {
 	ESP_LOGI(TAG, "Heap al arrancar: %d", esp_get_free_heap_size());
 	while (1)
 	{
-		demo_1();
-		demo_2();
-		demo_3();
-		demo_4();
-		demo_5();
-		demo_6();
-		demo_7();
-		demo_8();
-		demo_9();
-		demo_10();
+//		demo_1();
+//		demo_2();
+//		demo_3();
+//		demo_4();
+//		demo_5();
+//		demo_6();
+//		demo_7();
+//		demo_8();
+//		demo_9();
+//		demo_10();
+		demo_11();
 	}
 }
 
@@ -419,7 +444,7 @@ void app_main()
 
 	gl_init();
 	fs_init();
-	xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 10000, &fps, 1, NULL, 0);
+	//xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 10000, &fps, 1, NULL, 0);
 
 	ESP_LOGI(TAG, "Heap antes del task: %d", esp_get_free_heap_size());
 	xTaskCreatePinnedToCore(demo_task, "Demo", 10000, NULL, 1, NULL, 1);

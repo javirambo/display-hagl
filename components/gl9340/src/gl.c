@@ -965,6 +965,7 @@ void gl_set_font_colors(uint16_t fg, uint16_t bg)
 	terminal_actual.bg = bg;
 }
 
+// esto es solo para las fonts.
 void gl_set_transparent()
 {
 	terminal_actual.flags |= GL_IS_TRANSPARENT;
