@@ -49,7 +49,9 @@ extern "C"
 #define FONTX_WIDTH               (14)
 #define FONTX_HEIGHT              (15)
 #define FONTX_TYPE                (16)
+//  single-byte character set
 #define FONTX_TYPE_SBCS            (0)
+//  double-byte character set
 #define FONTX_TYPE_DBCS            (1)
 #define FONTX_GLYPH_DATA_START    (17)
 #define FONTX_BLOCK_TABLE_SIZE    (17)

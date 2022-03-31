@@ -1032,12 +1032,15 @@ static void gl_put_text(terminal_t *term, const char *str)
 		}
 
 		// busco el bitmap de la letra a mostrar:
-		bitmap_t *bmp = gl_get_glyph(term, code);
-		if (bmp)
+		if (13 != code && 10 != code)
 		{
-			gl_blit(term->rect.x0 + term->x, term->rect.y0 + term->y, bmp, NULL);
-			term->x += term->meta.width;
-			bitmap_delete(bmp);
+			bitmap_t *bmp = gl_get_glyph(term, code);
+			if (bmp)
+			{
+				gl_blit(term->rect.x0 + term->x, term->rect.y0 + term->y, bmp, NULL);
+				term->x += term->meta.width;
+				bitmap_delete(bmp);
+			}
 		}
 	}
 }
@@ -1069,18 +1072,32 @@ void gl_terminal_print(terminal_t *term, char *text)
 // Podés dividir la pantalla en una zona de texto tipo terminal, donde las letras fuera de los
 // márgenes hacen que se acomode el texto.
 // Importante: hay que eliminar la terminal con terminal_delete
-terminal_t* gl_terminal_new(int tx, int ty, int tw, int th, const uint8_t *fx, color_t fg, color_t bg)
+terminal_t* gl_terminal_new(int x0, int y0, int width, int height, const uint8_t *fx, color_t fg, color_t bg)
 {
 	terminal_t *terminal = malloc(sizeof(terminal_t));
 
+	// validaciones (porque se va a la mierda!)
+	if (x0 + width > DISPLAY_WIDTH)
+	{
+		width = DISPLAY_WIDTH - x0;
+		ESP_LOGW(TAG,"TERMINAL WIDTH > DISPLAY");
+	}
+	if (y0 + height > DISPLAY_HEIGHT)
+	{
+		ESP_LOGW(TAG,"TERMINAL HEIGHT > DISPLAY");
+		height = DISPLAY_HEIGHT - y0;
+	}
+
+	ESP_LOGE(TAG,"%d %d %d %d",x0,y0,x0 + width - 1,y0 + height - 1);
+
 	// guardo cosas de la font, ventana, etc:
 	fontx_meta(&(terminal->meta), fx);
-	terminal->rect.x0 = tx;
-	terminal->rect.y0 = ty;
-	terminal->rect.w = tw;
-	terminal->rect.h = th;
-	terminal->rect.x1 = tx + tw;
-	terminal->rect.y1 = ty + th;
+	terminal->rect.x0 = x0;
+	terminal->rect.y0 = y0;
+	terminal->rect.w = width;
+	terminal->rect.h = height;
+	terminal->rect.x1 = x0 + width - 1;
+	terminal->rect.y1 = y0 + height - 1;
 	terminal->fx = (uint8_t*) fx;
 	terminal->fg = fg;
 	terminal->bg = bg;

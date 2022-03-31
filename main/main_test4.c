@@ -8,7 +8,12 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <freertos/event_groups.h>
+#include <freertos/queue.h>
+#include <esp_event.h>
+#include <esp_task_wdt.h>
 #include <esp_log.h>
+#include <nvs_flash.h>
 #include <esp_task_wdt.h>
 
 #include "fsTools.h"
@@ -20,7 +25,7 @@
 static SemaphoreHandle_t mutex;
 static const char *TAG = "main";
 
-static void sleep()
+static void tiempito()
 {
 	gl_flush();
 	ESP_LOGI(TAG, "Heap despues: %d", esp_get_free_heap_size());
@@ -43,7 +48,7 @@ void demo_1()
 	gl_blit((320 - 71) / 2, (240 - 50) / 2, chancha, NULL);
 
 	bitmap_delete(chancha);
-	sleep();
+	tiempito();
 }
 
 // testea los colores y figuras /OK
@@ -53,7 +58,7 @@ void demo_2()
 	gl_fill_circle(160, 120, 80, MAROON);
 	gl_fill_rectangle(111, 111, 177, 177, ORANGEYEL);
 	gl_fill_rectangle(171, 171, 200, 207, ORANGE);
-	sleep();
+	tiempito();
 }
 
 // testea textos /OK
@@ -71,7 +76,7 @@ void demo_3()
 	gl_printf("PRINTF(%d) ", esp_random());
 	gl_printf("TRANSPARENTE");
 
-	sleep();
+	tiempito();
 }
 
 // muestra un pedacito de la imagen. //OK
@@ -94,7 +99,7 @@ void demo_4()
 	gl_blit(310, 120, image, &r);
 
 	bitmap_delete(image);
-	sleep();
+	tiempito();
 }
 
 // para imagenes bajadas desde GIMP /OK
@@ -113,7 +118,7 @@ void demo_5()
 	gl_blit(l, 230, image, NULL);
 
 	bitmap_delete(image);
-	sleep();
+	tiempito();
 }
 
 // OK
@@ -169,7 +174,7 @@ void demo_6()
 	gl_terminal_delete(term1);
 	gl_terminal_delete(term2);
 	gl_terminal_delete(term3);
-	sleep();
+	tiempito();
 }
 
 static void pantalla_para_scrolar()
@@ -204,8 +209,9 @@ static void pantalla_para_scrolar()
 void demo_7()
 {
 	RECT area;
-	set_rect_w(DISPLAY_WIDTH / 4, DISPLAY_HEIGHT / 4, DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2, &area);
 
+	// scroll de un rectangulo interno
+	set_rect_w(DISPLAY_WIDTH / 4, DISPLAY_HEIGHT / 4, DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2, &area);
 	for (int dir = 0; dir < 4; ++dir)
 	{
 		pantalla_para_scrolar();
@@ -216,7 +222,37 @@ void demo_7()
 			vTaskDelay(10 / portTICK_RATE_MS);
 		}
 	}
-	sleep();
+
+	// scroll de toda la pantalla
+	set_rect_w(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, &area);
+	for (int dir = 0; dir < 4; ++dir)
+	{
+		pantalla_para_scrolar();
+		for (int i = 1; i < 20; ++i)
+		{
+			gl_flush();
+			hagl_hal_scroll(dir, &area, 5, RED);
+			vTaskDelay(10 / portTICK_RATE_MS);
+		}
+	}
+	tiempito();
+}
+
+// scroll de toda la pantalla
+// (o terminal grande como toda la pantalla)
+void demo_8()
+{
+	gl_fill_screen(PURPLE);
+	terminal_t *term = gl_terminal_new(50, 50, 310, 220, font6x9, RED, BLACK);
+	//gl_fill_rect(&(term->rect), bg);
+
+	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
+		gl_terminal_print(term, "HOLA\n");
+	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
+		gl_terminal_print(term, "MONGO\n");
+
+	gl_terminal_delete(term);
+	tiempito();
 }
 
 void demo_task(void *params)
@@ -224,13 +260,14 @@ void demo_task(void *params)
 	ESP_LOGI(TAG, "Heap al arrancar: %d", esp_get_free_heap_size());
 	while (1)
 	{
-		demo_1();
-		demo_2();
-		demo_3();
-		demo_4();
-		demo_5();
-		demo_6();
+//		demo_1();
+//		demo_2();
+//		demo_3();
+//		demo_4();
+//		demo_5();
+		//demo_6();
 		demo_7();
+		demo_8();
 	}
 }
 
@@ -240,7 +277,8 @@ void demo_task(void *params)
  */
 void framebuffer_task(void *params)
 {
-	const TickType_t frequency = 1000 / 30 / portTICK_RATE_MS;
+	int *fps = (int*) params;
+	const TickType_t frequency = 1000 / (*fps) / portTICK_RATE_MS;
 	TickType_t last = xTaskGetTickCount();
 	while (1)
 	{
@@ -254,13 +292,36 @@ void framebuffer_task(void *params)
 
 void app_main()
 {
-	gl_init();
-	fs_init();
+	int fps = 5;
+	ESP_LOGD(TAG, "SDK version: %s", esp_get_idf_version());
+	ESP_LOGD(TAG, "Heap when starting: %d", esp_get_free_heap_size());
+
+	ESP_ERROR_CHECK(nvs_flash_init());
+	ESP_ERROR_CHECK(esp_event_loop_create_default());
 
 	mutex = xSemaphoreCreateMutex();
+
+	gl_init();
+//	gl_clear_screen(rgb565(0xff, 0x96, 0x96));
+
+	xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 8192, &fps, 1, NULL, 0);
+
+	fs_init();
+
+//	terminal_t *term = gl_terminal_new(0, 0, 320, 240, font6x9, RED, BLACK);
+//	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
+//	{
+//		gl_terminal_print(term, "HOLA\n");
+//	}
+//	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
+//	{
+//		gl_terminal_print(term, "MONGO\n");
+//	}
+//		//ESP_LOGD(FSLOG_STARTUP, "debug %d", esp_random());
+//	for (;;){}
 
 	ESP_LOGI(TAG, "Heap antes del task: %d", esp_get_free_heap_size());
 
 	xTaskCreatePinnedToCore(demo_task, "Demo", 10000, NULL, 1, NULL, 1);
-	//xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 8192, NULL, 1, NULL, 0);
+	//xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 8192, &fps, 1, NULL, 0);
 }

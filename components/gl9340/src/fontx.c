@@ -42,7 +42,7 @@
 #include "esp_log.h"
 #include "fontx.h"
 
-const char * TAG = "fontx";
+const char *TAG = "fontx";
 
 uint8_t* fontx_meta(fontx_meta_t *meta, const uint8_t *font)
 {
@@ -65,6 +65,12 @@ uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t *font)
 	glyph->pitch = (meta.width + 7) / 8;
 	glyph->size = glyph->pitch * meta.height;
 
+	//	The font size becomes (WF + 7) / 8 * HF [bytes].
+	//	The offset where the top of font image data from top of the file are:
+	//	Single byte code: 17 + Character code * Font size
+	//	Double byte code: 18 + 4 * NB + Nunber of previous codes * Font size
+
+	//  single-byte character set
 	if (FONTX_TYPE_SBCS == meta.type)
 	{
 		if (code < 0x100)
@@ -73,6 +79,7 @@ uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t *font)
 			return FONTX_OK;
 		}
 	}
+	//  double-byte character set
 	else
 	{
 		block_table = &font[FONTX_BLOCK_TABLE_START];
@@ -89,11 +96,9 @@ uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t *font)
 			{
 				/* Number of codes from top of the block_table. */
 				nc += code - sb;
-				glyph->buffer = &font[
-				FONTX_BLOCK_TABLE_START +
+				glyph->buffer = &font[ FONTX_BLOCK_TABLE_START +
 						4 * font[FONTX_BLOCK_TABLE_SIZE] +
-						nc * glyph->size
-						];
+						nc * glyph->size];
 				return FONTX_OK;
 			}
 			/* Number of codes in the previous block_tables. */
@@ -103,6 +108,6 @@ uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t *font)
 		}
 	}
 
-	ESP_LOGE(TAG,"GLYPH NOT FOUND [%c]", (char)code);
+	ESP_LOGE(TAG, "GLYPH NOT FOUND [%c]", (char )code);
 	return FONTX_ERR_GLYPH_NOT_FOUND;
 }
