@@ -320,6 +320,7 @@ typedef struct
 
 void gl_set_font(const uint8_t *font);
 void gl_set_font_color(color_t fg);
+uint16_t gl_get_bg_color();
 void gl_set_font_colors(color_t fg, color_t bg);
 void gl_set_transparent();
 void gl_clear_transparent();

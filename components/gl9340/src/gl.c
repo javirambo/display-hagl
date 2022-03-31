@@ -949,6 +949,11 @@ void gl_set_font(const uint8_t *fx)
 	terminal_actual.fx = fontx_meta(&(terminal_actual.meta), fx);
 }
 
+uint16_t gl_get_bg_color()
+{
+	return terminal_actual.bg;
+}
+
 void gl_set_font_color(uint16_t fg)
 {
 	terminal_actual.fg = fg;
