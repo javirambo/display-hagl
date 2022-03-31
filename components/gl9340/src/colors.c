@@ -190,3 +190,40 @@ rgb_t hsl_to_rgb888(hsl_t *hsl)
 
 	return rgb;
 }
+
+/*
+ * https://en.wikipedia.org/wiki/ANSI_escape_code
+ */
+uint16_t color_from_ansi(uint8_t color)
+{
+	static uint16_t ubuntu_colors[16][3] = {
+		{ 1, 1, 1 },
+		{ 222, 56, 43 },
+		{ 57, 181, 74 },
+		{ 255, 199, 6 },
+		{ 0, 111, 184 },
+		{ 118, 38, 113 },
+		{ 44, 181, 233 },
+		{ 204, 204, 204 },
+		{ 128, 128, 128 },
+		{ 255, 0, 0 },
+		{ 0, 255, 0 },
+		{ 255, 255, 0 },
+		{ 0, 0, 255 },
+		{ 255, 0, 255 },
+		{ 0, 255, 255 },
+		{ 255, 255, 255 }
+	};
+	uint16_t *rgb;
+	if (color >= 30 && color <= 37)
+		rgb = ubuntu_colors[color - 30];
+	else if (color >= 40 && color <= 47)
+		rgb = ubuntu_colors[color - 40];
+	else if (color >= 90 && color <= 97)
+		rgb = ubuntu_colors[color - 82];
+	else if (color >= 100 && color <= 107)
+		rgb = ubuntu_colors[color - 92];
+	else
+		return ORANGEYEL; // color no definido en ANSI!
+	return rgb565(rgb[0], rgb[1], rgb[2]);
+}

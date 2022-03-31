@@ -77,5 +77,6 @@ rgb_t rgb565_to_rgb888(uint16_t *input);
 rgb_t hsl_to_rgb888(hsl_t *hsl);
 hsl_t rgb888_to_hsl(rgb_t *rgb);
 uint16_t rgb888_to_rgb565(rgb_t *input);
+uint16_t color_from_ansi(uint8_t color);
 
 #endif /* COMPONENTS_HAGL_INCLUDE_COLORS_H_ */

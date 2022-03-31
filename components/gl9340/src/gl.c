@@ -46,7 +46,7 @@ static uint8_t workspace[JPG_WORKSPACE_SIZE] __attribute__((aligned(4)));
 
 // font actual que se usa para la pantalla.
 static terminal_t terminal_actual = {
-	.x = 0, .y = 0, .bg = BLACK, .fg = WHITE, .isTransparent = 0,
+	.x = 0, .y = 0, .bg = BLACK, .fg = WHITE, .flags = 0,
 	.rect.x0 = 0, .rect.y0 = 0, .rect.w = DISPLAY_WIDTH, .rect.h = DISPLAY_HEIGHT,
 	.rect.x1 = DISPLAY_WIDTH - 1, .rect.y1 = DISPLAY_HEIGHT - 1
 };
@@ -967,12 +967,12 @@ void gl_set_font_colors(uint16_t fg, uint16_t bg)
 
 void gl_set_transparent()
 {
-	terminal_actual.isTransparent = 1;
+	terminal_actual.flags |= GL_IS_TRANSPARENT;
 }
 
 void gl_clear_transparent()
 {
-	terminal_actual.isTransparent = 0;
+	terminal_actual.flags &= (~GL_IS_TRANSPARENT);
 }
 
 void gl_set_font_pos(uint16_t x, uint16_t y)
@@ -991,7 +991,7 @@ static bitmap_t* gl_get_glyph(terminal_t *term, char code)
 
 	char buf[glyph.width * glyph.height * 2];
 	bitmap_t *bitmap = bitmap_new(glyph.width, glyph.height, buf);
-	if (term->isTransparent)
+	if (term->flags & GL_IS_TRANSPARENT)
 		bitmap->transparentColor = term->bg;
 
 	uint8_t isForeGround;
@@ -1010,14 +1010,117 @@ static bitmap_t* gl_get_glyph(terminal_t *term, char code)
 	return bitmap;
 }
 
+/**
+ * Simula la terminal, aplicando colores al texto.
+ * https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
+ * https://en.wikipedia.org/wiki/ANSI_escape_code
+ */
+static void setAnsiColor(terminal_t *term, char *num)
+{
+	int color = atoi(num), aux;
+	//Reset / Normal	all attributes off
+	if (color == 0)
+	{
+		term->fg = WHITE;
+		term->bg = BLACK;
+	}
+	//[[reverse video]]	swap foreground and background colors
+	else if (color == 7)
+	{
+		aux = term->fg;
+		term->fg = term->bg;
+		term->bg = aux;
+	}
+	//Set foreground color
+	else if ((color >= 30 && color <= 37) || (color >= 90 && color <= 97))
+	{
+		term->fg = color_from_ansi(color);
+	}
+	//Default foreground color
+	else if (color == 39)
+	{
+		term->fg = WHITE;
+	}
+	//Set background color
+	else if ((color >= 40 && color <= 47) || (color >= 100 && color <= 107))
+	{
+		term->bg = color_from_ansi(color);
+	}
+	//Default background color
+	else if (color == 49)
+	{
+		term->bg = BLACK;
+	}
+}
+
+/*
+ * Verifica si el string comienza con un ANSI code,
+ * lo valida y si es correcto lo skipea,
+ * si es un código de color correcto, setea el color.
+ *
+ * ver:
+ * https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
+ */
+static char* verifyAnsiCode(terminal_t *term, char *str)
+{
+	int state = 0;
+	char *p = str;
+	char num[4];
+	int iNum = 0;
+
+	// ej: "\033[31;1;4mHello\033[0m"
+	while (*p != 0)
+	{
+		if (state == 0 && *p == '\033')
+			state = 1;
+		else if (state == 1 && *p == '[')
+			state = 2;
+		else if (state == 2 && *p >= '0' && *p <= '9')
+		{
+			if (iNum > 2)
+				return NULL; // numero de color demasiado grande! error!
+			num[iNum] = *p;
+			iNum++;
+			num[iNum] = 0;
+		}
+		else if (state == 2 && *p == ';')
+		{
+			setAnsiColor(term, num);
+			iNum = 0;
+		}
+		else if (state == 2 && *p == 'm')
+		{
+			setAnsiColor(term, num);
+			return p + 1;	// skip code (apunto al "Hello")
+		}
+		else
+			return NULL; // algo salio mal...no es un code ANSI...
+		++p;
+	}
+	return NULL;
+}
+
 // solo imprimo dentro del rect definido en la terminal.
 // si el texto quiere irse debajo de la linea bottom del window,
 // se hará un scroll del rectangulo.
-static void gl_put_text(terminal_t *term, const char *str)
+static void _gl_put_text(terminal_t *term, const char *text)
 {
 	char code;
+	char *str = (char*) text;
 	while (*str != 0)
 	{
+		// validaciones de ANSI, ej: "\033[31;1;4mHello\033[0m"
+		if (term->flags & GL_ANSI_ENABLED)
+		{
+			// si viene un color, se setea y corre el str:
+			char *p = verifyAnsiCode(term, str);
+			if (p != NULL)
+			{
+				str = p;
+				continue;
+			}
+		}
+
 		code = *str++;
 
 		// los ENTERS modifican la posicion,
@@ -1053,25 +1156,35 @@ static void gl_put_text(terminal_t *term, const char *str)
 // imprime en pantalla, pero dentro de la ventana clip_window
 void gl_print(const char *text)
 {
-	gl_put_text(&terminal_actual, text);
+	_gl_put_text(&terminal_actual, text);
 }
 
-int gl_printf(const char *format, ...)
+// se pueden generar terminales diferentes a la por defecto.
+void gl_terminal_print(terminal_t *term, char *text)
+{
+	_gl_put_text(term, text);
+}
+
+static int _gl_printf(terminal_t *term, const char *format, ...)
 {
 	va_list arg;
 	va_start(arg, format);
 	char temp[200];
 	int len = vsnprintf(temp, sizeof(temp) - 1, format, arg);
 	temp[sizeof(temp) - 1] = 0;
-	gl_put_text(&terminal_actual, temp);
+	_gl_put_text(term, temp);
 	va_end(arg);
 	return len;
 }
 
-// se pueden generar terminales diferentes a la por defecto.
-void gl_terminal_print(terminal_t *term, char *text)
+int gl_printf(const char *format, ...)
 {
-	gl_put_text(term, text);
+	return _gl_printf(&terminal_actual, format);
+}
+
+int gl_terminal_printf(terminal_t *term, char *format, ...)
+{
+	return _gl_printf(term, format);
 }
 
 // Podés dividir la pantalla en una zona de texto tipo terminal, donde las letras fuera de los
@@ -1106,11 +1219,20 @@ terminal_t* gl_terminal_new(int x0, int y0, int width, int height, const uint8_t
 	terminal->bg = bg;
 	terminal->x = 0;
 	terminal->y = 0;
+	terminal->flags = 0;
 
 	// borro la pantalla que ocupa la terminal:
 	gl_fill_rect(&(terminal->rect), bg);
 
 	return terminal;
+}
+
+void gl_terminal_ansi_enabled(terminal_t *terminal, bool enabled)
+{
+	if (enabled)
+		terminal->flags |= GL_ANSI_ENABLED;
+	else
+		terminal->flags &= (~GL_ANSI_ENABLED);
 }
 
 void gl_terminal_delete(terminal_t *terminal)

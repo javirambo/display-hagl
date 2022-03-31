@@ -21,6 +21,7 @@
 #include "gl.h"
 #include "fonts/font6x9.h"
 #include "fonts/font8x13O-ISO8859-13.h"
+#include "fonts/font9x18-ISO8859-13.h"
 
 static SemaphoreHandle_t mutex;
 static const char *TAG = "main";
@@ -257,6 +258,93 @@ void demo_8()
 	tiempito();
 }
 
+/*
+ ---test solo del color_from_ansi---
+ I (26129) main: colors => 0000 0000 1084 1084
+ I (26129) main: colors => C5D9 C5D9 00F8 00F8
+ I (26129) main: colors => A93D A93D E007 E007
+ I (26129) main: colors => 20FE 20FE E0FF E0FF
+ I (26139) main: colors => 7703 7703 1F00 1F00
+ I (26139) main: colors => 2E71 2E71 1FF8 1FF8
+ I (26149) main: colors => BD2D BD2D FF07 FF07
+ I (26149) main: colors => 79CE 79CE FFFF FFFF
+ */
+void demo_ansi_colors(terminal_t *term)
+{
+	for (int i = 0; i < 8; i++)
+	{
+		ESP_LOGI(TAG, "colors => %04X %04X %04X %04X", color_from_ansi(30 + i), color_from_ansi(40 + i),
+				color_from_ansi(90 + i), color_from_ansi(100 + i));
+		term->bg = i == 0 ? WHITE : BLACK;
+		term->fg = color_from_ansi(30 + i);
+		gl_terminal_printf(term, "FG %04X ", term->fg);
+		term->fg = color_from_ansi(90 + i);
+		gl_terminal_printf(term, "FG %04X ", term->fg);
+		term->fg = i == 7 ? BLACK : WHITE;
+		term->bg = color_from_ansi(40 + i);
+		gl_terminal_printf(term, "BG %04X ", term->bg);
+		term->bg = color_from_ansi(100 + i);
+		gl_terminal_printf(term, "BG %04X\n", term->bg);
+	}
+	ESP_LOGI(TAG, "color prohibido => %04X", color_from_ansi(0));
+	gl_flush();
+	vTaskDelay(5000 / portTICK_RATE_MS);
+}
+
+void demo_ansi_tty(terminal_t *term)
+{
+	static char *names[] = {
+		"Black", "Red", "Green", "Yellow",
+		"Blue", "Magenta", "Cyan", "White",
+		"Bright Black (Gray)", "Bright Red", "Bright Green", "Bright Yellow",
+		"Bright Blue", "Bright Magenta", "Bright Cyan", "Bright White" };
+
+	int i;
+	char buf[200];
+
+	// cambio colores de letra:
+	for (i = 0; i < 8; i++)
+	{
+		sprintf(buf, "\033[107;%dmFG=%d color %s\033[0m\n", 30 + i, 30 + i, names[i]);
+		gl_terminal_print(term, buf);
+	}
+	for (i = 0; i < 8; i++)
+	{
+		sprintf(buf, "\033[40;%dmFG=%d color %s\033[0m\n", 90 + i, 90 + i, names[8 + i]);
+		gl_terminal_print(term, buf);
+	}
+	gl_flush();
+
+	vTaskDelay(1000 / portTICK_RATE_MS);
+
+	// cambio los colores de fondo:
+	for (i = 0; i < 8; i++)
+	{
+		sprintf(buf, "\033[97;%dmBG=%d, Blanco sobre %s\033[0m\n", 40 + i, 40 + i, names[i]);
+		gl_terminal_print(term, buf);
+	}
+	for (i = 0; i < 8; i++)
+	{
+		sprintf(buf, "\033[30;%dmBG=%d Negro sobre %s\033[0m\n", 100 + i, 100 + i, names[8 + i]);
+		gl_terminal_print(term, buf);
+	}
+	gl_flush();
+}
+
+// colores controlados por códigos de terminal (\033 ANSI escape sequence)
+// ejemplo: "\033[0;31m texto rojo \033[0m"
+void demo_9()
+{
+	static bool toggle = true;
+	terminal_t *term = gl_terminal_new(0, 0, 320, 240, font9x18_ISO8859_13, WHITE, BLACK);
+	gl_terminal_ansi_enabled(term, toggle);
+	toggle = !toggle;
+	demo_ansi_colors(term);
+	demo_ansi_tty(term);
+	gl_terminal_delete(term);
+	tiempito();
+}
+
 void demo_task(void *params)
 {
 	ESP_LOGI(TAG, "Heap al arrancar: %d", esp_get_free_heap_size());
@@ -270,6 +358,7 @@ void demo_task(void *params)
 		demo_6();
 		demo_7();
 		demo_8();
+		demo_9();
 	}
 }
 

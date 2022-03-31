@@ -306,13 +306,19 @@ void gl_fill_rounded_rect(RECT *rect, int16_t r, color_t color);
 /////// FUNCIONES PARA TEXTO
 //////////////////////////////////////////////////////////////////////
 
+typedef enum
+{
+	GL_IS_TRANSPARENT = 0x01, 	// fondo transparente
+	GL_ANSI_ENABLED = 0x02		// terminal ansi enabled (con colores, ej: \033[31;1;4mHello\033[0m)
+} terminal_flags;
+
 typedef struct
 {
 	uint16_t x; 			// posicion actual de la font
 	uint16_t y; 			//  "
 	color_t bg; 			// color de fondo
 	color_t fg; 			// color de la letra
-	uint8_t isTransparent;	// eso
+	uint8_t flags;			// ver enum terminal_flags
 	uint8_t *fx;			// font seleccionada
 	fontx_meta_t meta; 		// datos de la font
 	RECT rect;				// ventana de pantalla que usara la terminal
@@ -330,7 +336,9 @@ int gl_printf(const char *format, ...);
 
 terminal_t* gl_terminal_new(int x, int y, int w, int h, const uint8_t *fx, color_t fg, color_t bg);
 void gl_terminal_print(terminal_t *term, char *text);
+int gl_terminal_printf(terminal_t *term, char *format, ...);
 void gl_terminal_delete(terminal_t *term);
+void gl_terminal_ansi_enabled(terminal_t *term, bool enabled);
 
 #ifdef __cplusplus
 }

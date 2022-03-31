@@ -293,8 +293,10 @@ void mipi_display_write(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint1
 }
 
 /**
+ * Esta la agregué yo.
  * El buffer tiene que tener espacio para (ancho * alto * 2) bytes (pixels)
  * ESTA FUNCION NO ANDA, Y DEBE SER PORQUE EL DISPLAY NO ACEPTA LA LECTURA DE LA MEMORIA.
+ * No es estandar MIPI. Hay que ver cual seria....
  */
 void mipi_get_pixel_data(spi_device_handle_t spi, uint16_t x1, uint16_t y1, uint16_t w, uint16_t h, uint8_t *buffer)
 {
