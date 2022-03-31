@@ -139,7 +139,6 @@ void bitmap_shift(uint8_t direction, RECT *window, bitmap_t *bmp)
 	switch (direction)
 	{
 		case SCROLL_UP:
-			ESP_LOGE("*","%d %d %d %d", window->x0,window->y0, window->x1,window->y1);
 			for (y = window->y0; y < window->y1; y++)
 				for (x = window->x0; x <= window->x1; x++)
 					bmp->pixels[y][x] = bmp->pixels[y + 1][x];

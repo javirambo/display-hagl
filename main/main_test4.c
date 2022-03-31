@@ -239,16 +239,18 @@ void demo_7()
 }
 
 // scroll de toda la pantalla
-// (o terminal grande como toda la pantalla)
+// (o terminal grande como toda la pantalla) /OK
 void demo_8()
 {
 	gl_fill_screen(PURPLE);
-	terminal_t *term = gl_terminal_new(50, 50, 310, 220, font6x9, RED, BLACK);
-	//gl_fill_rect(&(term->rect), bg);
 
-	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
+	// testeo que el x0+ancho no explote (y en y)
+
+	terminal_t *term = gl_terminal_new(50, 50, 310, 220, font6x9, RED, BLACK);
+
+	for (int i = 0; i < 20; i++)
 		gl_terminal_print(term, "HOLA\n");
-	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
+	for (int i = 0; i < 20; i++)
 		gl_terminal_print(term, "MONGO\n");
 
 	gl_terminal_delete(term);
@@ -260,12 +262,12 @@ void demo_task(void *params)
 	ESP_LOGI(TAG, "Heap al arrancar: %d", esp_get_free_heap_size());
 	while (1)
 	{
-//		demo_1();
-//		demo_2();
-//		demo_3();
-//		demo_4();
-//		demo_5();
-		//demo_6();
+		demo_1();
+		demo_2();
+		demo_3();
+		demo_4();
+		demo_5();
+		demo_6();
 		demo_7();
 		demo_8();
 	}

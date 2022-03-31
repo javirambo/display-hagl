@@ -1080,15 +1080,13 @@ terminal_t* gl_terminal_new(int x0, int y0, int width, int height, const uint8_t
 	if (x0 + width > DISPLAY_WIDTH)
 	{
 		width = DISPLAY_WIDTH - x0;
-		ESP_LOGW(TAG,"TERMINAL WIDTH > DISPLAY");
+		ESP_LOGW(TAG, "TERMINAL WIDTH > DISPLAY");
 	}
 	if (y0 + height > DISPLAY_HEIGHT)
 	{
-		ESP_LOGW(TAG,"TERMINAL HEIGHT > DISPLAY");
+		ESP_LOGW(TAG, "TERMINAL HEIGHT > DISPLAY");
 		height = DISPLAY_HEIGHT - y0;
 	}
-
-	ESP_LOGE(TAG,"%d %d %d %d",x0,y0,x0 + width - 1,y0 + height - 1);
 
 	// guardo cosas de la font, ventana, etc:
 	fontx_meta(&(terminal->meta), fx);
