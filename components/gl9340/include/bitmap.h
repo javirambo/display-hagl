@@ -21,7 +21,8 @@ typedef struct
 	uint8_t needsFree;	// =1 si es gimp image (no tengo que hacerle free al buffer)
 } bitmap_t;
 
-bitmap_t *bitmap_new(int ancho, int alto, void *buffer);
+bitmap_t *bitmap_new(int ancho, int alto);
+bitmap_t* bitmap_init(int width, int height, void *buffer);
 void bitmap_delete(bitmap_t *bmp);
 void bitmap_blit(int16_t x0, int16_t y0, bitmap_t *src, bitmap_t *dst, RECT *rect);
 void bitmap_shift(uint8_t direction, RECT * window, bitmap_t * bmp);

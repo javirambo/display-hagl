@@ -268,6 +268,8 @@ void demo_8()
  I (26139) main: colors => 2E71 2E71 1FF8 1FF8
  I (26149) main: colors => BD2D BD2D FF07 FF07
  I (26149) main: colors => 79CE 79CE FFFF FFFF
+
+ OK
  */
 void demo_ansi_colors(terminal_t *term)
 {
@@ -291,6 +293,7 @@ void demo_ansi_colors(terminal_t *term)
 	vTaskDelay(5000 / portTICK_RATE_MS);
 }
 
+// OK
 void demo_ansi_tty(terminal_t *term)
 {
 	static char *names[] = {
@@ -333,6 +336,7 @@ void demo_ansi_tty(terminal_t *term)
 
 // colores controlados por códigos de terminal (\033 ANSI escape sequence)
 // ejemplo: "\033[0;31m texto rojo \033[0m"
+// OK
 void demo_9()
 {
 	static bool toggle = true;
@@ -342,6 +346,31 @@ void demo_9()
 	demo_ansi_colors(term);
 	demo_ansi_tty(term);
 	gl_terminal_delete(term);
+	tiempito();
+}
+
+// el texto a veces aparece con puntos negros sobre las letras....OK
+void demo_10()
+{
+	gl_set_font(font9x18_ISO8859_13);
+	gl_set_font_colors(WHITE, BLACK);
+
+	gl_set_font_pos(0, 0);
+	gl_fill_screen(BLACK);
+	gl_fill_circle(320 / 2, 240 / 2, 100, BLUE);
+	gl_clear_transparent();
+	for (int var = 0; var < 14; ++var)
+		gl_print("Lorem ipsum dolor sit amet.");
+
+	vTaskDelay(5000 / portTICK_RATE_MS);
+
+	gl_set_font_pos(0, 0);
+	gl_fill_screen(BLACK);
+	gl_fill_circle(320 / 2, 240 / 2, 100, BLUE);
+	gl_set_transparent();
+	for (int var = 0; var < 14; ++var)
+		gl_print("Sed ut perspiciatis unde om.");
+
 	tiempito();
 }
 
@@ -359,6 +388,7 @@ void demo_task(void *params)
 		demo_7();
 		demo_8();
 		demo_9();
+		demo_10();
 	}
 }
 
@@ -384,35 +414,13 @@ void framebuffer_task(void *params)
 void app_main()
 {
 	int fps = 5;
-	ESP_LOGD(TAG, "SDK version: %s", esp_get_idf_version());
 	ESP_LOGD(TAG, "Heap when starting: %d", esp_get_free_heap_size());
-
-	ESP_ERROR_CHECK(nvs_flash_init());
-	ESP_ERROR_CHECK(esp_event_loop_create_default());
-
 	mutex = xSemaphoreCreateMutex();
 
 	gl_init();
-//	gl_clear_screen(rgb565(0xff, 0x96, 0x96));
-
-	xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 8192, &fps, 1, NULL, 0);
-
 	fs_init();
-
-//	terminal_t *term = gl_terminal_new(0, 0, 320, 240, font6x9, RED, BLACK);
-//	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
-//	{
-//		gl_terminal_print(term, "HOLA\n");
-//	}
-//	for (int i = 0; i < 20; i++) // ACA EXPLOTA!!!
-//	{
-//		gl_terminal_print(term, "MONGO\n");
-//	}
-//		//ESP_LOGD(FSLOG_STARTUP, "debug %d", esp_random());
-//	for (;;){}
+	xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 10000, &fps, 1, NULL, 0);
 
 	ESP_LOGI(TAG, "Heap antes del task: %d", esp_get_free_heap_size());
-
 	xTaskCreatePinnedToCore(demo_task, "Demo", 10000, NULL, 1, NULL, 1);
-	//xTaskCreatePinnedToCore(framebuffer_task, "Framebuffer", 8192, &fps, 1, NULL, 0);
 }

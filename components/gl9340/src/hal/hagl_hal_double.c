@@ -25,7 +25,7 @@ void hagl_hal_init()
 #ifdef CONFIG_HAGL_HAL_LOCK_WHEN_FLUSHING
 	mutex = xSemaphoreCreateMutex();
 #endif
-	fore_bitmap = bitmap_new(DISPLAY_WIDTH, DISPLAY_HEIGHT, NULL);
+	fore_bitmap = bitmap_new(DISPLAY_WIDTH, DISPLAY_HEIGHT);
 }
 
 void hagl_hal_flush()

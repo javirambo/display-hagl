@@ -193,7 +193,7 @@ bitmap_t* gl_load_image(const char *filename)
 	if (result == JDR_OK)
 	{
 		//-1- creo el bitmap con sus tamaños y cosas de la imagen:
-		bmp = bitmap_new(decoder.width, decoder.height, NULL);
+		bmp = bitmap_new(decoder.width, decoder.height);
 
 		//-2- copio la imagen en el buffer:
 		device.image = bmp;
@@ -235,7 +235,7 @@ bitmap_t* gl_load_gimp_image(void *gimp_struct)
 	*pgs = 0;
 
 	// voy a usar el buffer estatico del GIMP.
-	return bitmap_new(width, height, pixel_data);
+	return bitmap_init(width, height, pixel_data);
 }
 
 /*
@@ -989,8 +989,7 @@ static bitmap_t* gl_get_glyph(terminal_t *term, char code)
 	if (0 != fontx_glyph(&glyph, (wchar_t) code, term->fx))
 		return NULL; // no existe ese caracter!
 
-	char buf[glyph.width * glyph.height * 2];
-	bitmap_t *bitmap = bitmap_new(glyph.width, glyph.height, buf);
+	bitmap_t *bitmap = bitmap_new(glyph.width, glyph.height);
 	if (term->flags & GL_IS_TRANSPARENT)
 		bitmap->transparentColor = term->bg;
 

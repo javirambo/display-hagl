@@ -9,17 +9,22 @@
 #include <string.h>
 #include "bitmap.h"
 
-bitmap_t* bitmap_new(int width, int height, void *buffer)
+/**
+ * Hace mallos solo del array de lineas
+ * y acomoda el buffer con la imagen dentro del bitmap.
+ */
+bitmap_t* bitmap_init(int width, int height, void *buffer)
 {
 	bitmap_t *bmp = calloc(1, sizeof(bitmap_t));
 	bmp->width = width;
 	bmp->height = height;
 	bmp->transparentColor = -1;
+	bmp->needsFree = 0;
 
 	// si le paso un buffer con una imagen, obtengo los punteros a las lineas:
 	if (buffer != NULL)
 	{
-		bmp->pixels = calloc(height, sizeof(color_t*));
+		bmp->pixels = heap_caps_malloc(height * sizeof(color_t*), MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
 		color_t *p = (color_t*) buffer;
 		for (int y = 0; y < height; y++)
 		{
@@ -30,25 +35,32 @@ bitmap_t* bitmap_new(int width, int height, void *buffer)
 				p++;
 			}
 		}
-		bmp->needsFree = 0;
 	}
+	return bmp;
+}
 
-	// creo un buffer con el tamaño especificado:
-	else
+/*
+ * Hace un malloc total del bitmap
+ */
+bitmap_t* bitmap_new(int width, int height)
+{
+	bitmap_t *bmp = calloc(1, sizeof(bitmap_t));
+	bmp->width = width;
+	bmp->height = height;
+	bmp->transparentColor = -1;
+	bmp->needsFree = 1;
+
+	// espacio para el array de punteros:
+	bmp->pixels = heap_caps_malloc(height * sizeof(color_t*), MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
+	if (bmp->pixels == NULL)
+		ESP_LOGE("*", "no mem!");
+
+	// espacio para cada linea:
+	for (int i = 0; i < height; i++)
 	{
-		// espacio para el array de punteros:
-		bmp->pixels = heap_caps_malloc(height * sizeof(color_t*), MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
-		if (bmp->pixels == NULL)
+		bmp->pixels[i] = heap_caps_malloc(width * sizeof(color_t), MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
+		if (bmp->pixels[i] == NULL)
 			ESP_LOGE("*", "no mem!");
-
-		// espacio para cada linea:
-		for (int i = 0; i < height; i++)
-		{
-			bmp->pixels[i] = heap_caps_malloc(width * sizeof(color_t), MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
-			if (bmp->pixels[i] == NULL)
-				ESP_LOGE("*", "no mem!");
-		}
-		bmp->needsFree = 1;
 	}
 	return bmp;
 }
