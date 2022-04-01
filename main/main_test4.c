@@ -381,7 +381,7 @@ void mostrar_digito(int x, int y, bitmap_t *bmp, int digito, int ancho)
 	gl_blit(x, y, bmp, &r);
 }
 
-// usa un bitmap como FONT (por ahora solo numerico)
+// usa un bitmap como FONT (por ahora solo numerico) //OK
 void demo_11()
 {
 	gl_fill_screen(WHITE);

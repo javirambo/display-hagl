@@ -29,8 +29,8 @@ void set_rect_c(int x0, int y0, int x1, int y1, RECT *rec)
 	rec->y0 = y0;
 	rec->y1 = y1;
 	rect_norm(rec);
-	rec->w = rec->x1 - rec->x0 + 1;
-	rec->h = rec->y1 - rec->y0 + 1;
+	rec->w = rec->x1 - rec->x0;
+	rec->h = rec->y1 - rec->y0;
 }
 
 void set_rect_w(int x, int y, int w, int h, RECT *rec)
